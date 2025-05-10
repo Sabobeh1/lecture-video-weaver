@@ -72,6 +72,16 @@ const Preview = () => {
   };
 
   const currentSlide = slides.find((slide) => slide.id === activeSlide);
+  
+  // Fix: Use a different approach to handle tab switching
+  const handleEditButtonClick = () => {
+    // Get the edit tab trigger element
+    const editTabTrigger = document.querySelector('[data-value="edit"]') as HTMLElement | null;
+    // If found, trigger a click on it
+    if (editTabTrigger && 'click' in editTabTrigger) {
+      editTabTrigger.click();
+    }
+  };
 
   return (
     <AppLayout title="Preview & Edit" subtitle="Review and edit your lecture script">
@@ -169,7 +179,7 @@ const Preview = () => {
                         <Button
                           variant="ghost" 
                           size="sm"
-                          onClick={() => document.querySelector('[data-value="edit"]')?.click()}
+                          onClick={handleEditButtonClick}
                         >
                           <Edit size={16} className="mr-1" />
                           Edit Script
