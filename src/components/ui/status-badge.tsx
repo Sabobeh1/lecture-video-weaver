@@ -1,10 +1,9 @@
 
 import { cn } from "@/lib/utils";
-
-type Status = "pending" | "processing" | "completed" | "error";
+import { UploadStatus } from "@/types/upload";
 
 interface StatusBadgeProps {
-  status: Status;
+  status: UploadStatus;
   className?: string;
 }
 

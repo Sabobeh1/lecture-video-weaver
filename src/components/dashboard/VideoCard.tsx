@@ -2,7 +2,7 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Play, MoreHorizontal } from "lucide-react";
+import { Play, MoreHorizontal, RefreshCw, Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   DropdownMenu,
@@ -10,23 +10,37 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useUploads } from "@/hooks/useUploads";
+import { UploadStatus } from "@/types/upload";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface VideoCardProps {
   id: string;
   title: string;
-  thumbnailUrl: string;
-  status: "pending" | "processing" | "completed" | "error";
+  thumbnailUrl?: string;
+  status: UploadStatus;
   createdAt: string;
 }
 
 export function VideoCard({ id, title, thumbnailUrl, status, createdAt }: VideoCardProps) {
+  const { retryUpload } = useUploads();
   const formattedDate = new Date(createdAt).toLocaleDateString();
+  const isProcessing = status === "processing";
+
+  const handleRetry = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await retryUpload(id);
+  };
 
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
       <div className="relative">
         <div className="aspect-video bg-gray-200 overflow-hidden">
-          {thumbnailUrl ? (
+          {isProcessing ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <Skeleton className="w-full h-full" />
+            </div>
+          ) : thumbnailUrl ? (
             <img
               src={thumbnailUrl}
               alt={title}
@@ -53,7 +67,9 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt }: VideoC
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem>Edit</DropdownMenuItem>
-              <DropdownMenuItem>Download</DropdownMenuItem>
+              {status === "completed" && (
+                <DropdownMenuItem>Download</DropdownMenuItem>
+              )}
               <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -72,11 +88,18 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt }: VideoC
         ) : status === "pending" || status === "processing" ? (
           <Link to={`/preview/${id}`} className="w-full">
             <Button variant="outline" className="w-full" size="sm">
+              <Pencil className="mr-2 h-4 w-4" />
               Preview & Edit
             </Button>
           </Link>
         ) : (
-          <Button variant="outline" className="w-full text-red-600" size="sm">
+          <Button 
+            variant="outline" 
+            className="w-full text-red-600" 
+            size="sm"
+            onClick={handleRetry}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
             Retry
           </Button>
         )}

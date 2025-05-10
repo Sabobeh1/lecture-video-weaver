@@ -13,44 +13,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
 import { Link } from "react-router-dom";
-
-// Mock data for demonstration
-const mockVideos = [
-  {
-    id: "1",
-    title: "Introduction to Machine Learning",
-    thumbnailUrl: "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?auto=format&w=500",
-    status: "completed" as const,
-    createdAt: "2025-04-25T10:30:00Z",
-  },
-  {
-    id: "2",
-    title: "Advanced Data Structures",
-    thumbnailUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&w=500",
-    status: "processing" as const,
-    createdAt: "2025-05-01T15:20:00Z",
-  },
-  {
-    id: "3",
-    title: "Web Development Fundamentals",
-    thumbnailUrl: "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&w=500",
-    status: "pending" as const,
-    createdAt: "2025-05-08T09:15:00Z",
-  },
-  {
-    id: "4",
-    title: "Quantum Computing Basics",
-    thumbnailUrl: "",
-    status: "error" as const,
-    createdAt: "2025-04-20T11:45:00Z",
-  },
-];
+import { useUploads } from "@/hooks/useUploads";
+import { UploadStatus } from "@/types/upload";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/components/ui/card";
 
 const Dashboard = () => {
+  const { uploads, loading } = useUploads();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const filteredVideos = mockVideos.filter(video => {
+  // Filter uploads based on search query and status filter
+  const filteredVideos = uploads.filter(video => {
     const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || video.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -95,14 +69,39 @@ const Dashboard = () => {
           </Link>
         </div>
         
-        {/* Video grid */}
-        {filteredVideos.length > 0 ? (
+        {/* Loading state */}
+        {loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredVideos.map((video) => (
-              <VideoCard key={video.id} {...video} />
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-40" />
+                <div className="p-4">
+                  <Skeleton className="h-5 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+                <div className="p-4 pt-0">
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              </Card>
             ))}
           </div>
-        ) : (
+        )}
+        
+        {/* Video grid */}
+        {!loading && filteredVideos.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredVideos.map((video) => (
+              <VideoCard 
+                key={video.id} 
+                id={video.id}
+                title={video.title}
+                thumbnailUrl={video.thumbnailUrl}
+                status={video.status}
+                createdAt={video.createdAt}
+              />
+            ))}
+          </div>
+        ) : !loading ? (
           <div className="text-center py-12 bg-white rounded-lg border">
             <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <Search size={24} className="text-gray-400" />
@@ -122,7 +121,7 @@ const Dashboard = () => {
               </Link>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </AppLayout>
   );

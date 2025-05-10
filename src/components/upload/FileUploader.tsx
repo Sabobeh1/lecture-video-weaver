@@ -3,12 +3,14 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { Upload, File, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUploads } from "@/hooks/useUploads";
+import { useNavigate } from "react-router-dom";
 
 interface FileUploaderProps {
-  onFileSelected: (file: File) => void;
+  onFileSelected?: (file: File) => void;
   maxSize?: number; // in MB
   allowedTypes?: string[];
 }
@@ -18,6 +20,8 @@ export function FileUploader({
   maxSize = 100, 
   allowedTypes = [".pdf", ".pptx"]
 }: FileUploaderProps) {
+  const navigate = useNavigate();
+  const { createUpload } = useUploads();
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -73,6 +77,11 @@ export function FileUploader({
     if (!validateFile(file)) return;
     
     setSelectedFile(file);
+    
+    if (onFileSelected) {
+      onFileSelected(file);
+    }
+    
     simulateUpload(file);
   };
 
@@ -86,12 +95,20 @@ export function FileUploader({
         if (prev >= 100) {
           clearInterval(interval);
           setIsUploading(false);
-          onFileSelected(file);
+          handleSubmitUpload(file);
           return 100;
         }
         return prev + 5;
       });
     }, 100);
+  };
+
+  const handleSubmitUpload = async (file: File) => {
+    const uploadId = await createUpload(file, file.name);
+    if (uploadId) {
+      // Navigate to the preview page
+      navigate(`/preview/${uploadId}`);
+    }
   };
 
   const handleRemoveFile = () => {
