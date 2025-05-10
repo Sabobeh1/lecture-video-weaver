@@ -1,5 +1,5 @@
-
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,20 +13,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "@/components/ui/sonner";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Loader2 } from "lucide-react";
 
 const Settings = () => {
+  const { userProfile, updateUsername } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [username, setUsername] = useState(userProfile?.username || "");
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    if (!username || username === userProfile?.username) return;
+    
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await updateUsername(username);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+    } finally {
       setIsSaving(false);
-      toast.success("Profile updated successfully!");
-    }, 1000);
+    }
   };
 
   const handleSavePreferences = () => {
@@ -34,8 +40,15 @@ const Settings = () => {
     // Simulate API call
     setTimeout(() => {
       setIsSaving(false);
-      toast.success("Preferences updated successfully!");
     }, 1000);
+  };
+
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (userProfile?.username) {
+      return userProfile.username.substring(0, 2).toUpperCase();
+    }
+    return "U";
   };
 
   return (
@@ -54,7 +67,7 @@ const Settings = () => {
               <div className="flex flex-col gap-3 items-center">
                 <Avatar className="h-24 w-24">
                   <AvatarImage src="" />
-                  <AvatarFallback className="text-xl">JD</AvatarFallback>
+                  <AvatarFallback className="text-xl">{getInitials()}</AvatarFallback>
                 </Avatar>
                 <Button variant="outline" size="sm">
                   Change Avatar
@@ -64,19 +77,30 @@ const Settings = () => {
               <div className="space-y-4 flex-1">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input id="fullName" defaultValue="John Doe" />
+                    <Label htmlFor="username">Username</Label>
+                    <Input 
+                      id="username" 
+                      value={username} 
+                      onChange={(e) => setUsername(e.target.value)}
+                      disabled={isSaving}
+                    />
                   </div>
                   
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" defaultValue="john.doe@example.com" />
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      value={userProfile?.email || ""} 
+                      disabled 
+                      className="bg-gray-100"
+                    />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="bio">Bio</Label>
-                  <Input id="bio" defaultValue="Professor of Computer Science" />
+                  <Input id="bio" defaultValue="" placeholder="Add a short bio" />
                 </div>
               </div>
             </div>
@@ -88,24 +112,29 @@ const Settings = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input id="currentPassword" type="password" />
+                  <Input id="currentPassword" type="password" disabled={isSaving} />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="newPassword">New Password</Label>
-                  <Input id="newPassword" type="password" />
+                  <Input id="newPassword" type="password" disabled={isSaving} />
                 </div>
               </div>
               
               <div className="mt-4 space-y-2">
                 <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <Input id="confirmPassword" type="password" />
+                <Input id="confirmPassword" type="password" disabled={isSaving} />
               </div>
             </div>
             
             <div className="flex justify-end">
-              <Button onClick={handleSaveProfile} disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Changes"}
+              <Button onClick={handleSaveProfile} disabled={isSaving || !username || username === userProfile?.username}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : "Save Changes"}
               </Button>
             </div>
           </CardContent>
@@ -209,7 +238,12 @@ const Settings = () => {
             
             <div className="flex justify-end">
               <Button onClick={handleSavePreferences} disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Preferences"}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : "Save Preferences"}
               </Button>
             </div>
           </CardContent>
