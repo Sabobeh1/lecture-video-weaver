@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -26,6 +26,9 @@ if (typeof window !== 'undefined') {
 // Initialize Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Initialize providers
+export const googleProvider = new GoogleAuthProvider();
 
 // Connect to Firestore emulator in development if needed
 // if (process.env.NODE_ENV === 'development') {

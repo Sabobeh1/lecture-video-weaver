@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { 
   User, 
@@ -6,10 +5,11 @@ import {
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  signInWithPopup
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, googleProvider } from "@/lib/firebase";
 import { toast } from "@/components/ui/sonner";
 
 interface UserProfile {
@@ -24,6 +24,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUsername: (username: string) => Promise<void>;
@@ -92,6 +93,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // Check if user profile exists in Firestore, if not create one
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        // Create a new user profile in Firestore
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          email: user.email,
+          username: user.displayName || user.email?.split('@')[0] || `user_${user.uid.substring(0, 5)}`
+        });
+      }
+
+      toast.success("Signed in with Google successfully!");
+    } catch (error: any) {
+      console.error("Error signing in with Google:", error);
+      toast.error(error.message || "Failed to sign in with Google");
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -141,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     resetPassword,
     updateUsername
