@@ -30,12 +30,12 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
   const isProcessing = status === "processing";
   const isError = status === "error";
 
-  const handleRetry = async (e: React.MouseEvent<HTMLButtonElement | HTMLLIElement>) => {
+  const handleRetry = async (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     await retryUpload(id);
   };
 
-  const handleDownload = async (e: React.MouseEvent<HTMLButtonElement | HTMLLIElement>) => {
+  const handleDownload = async (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     await downloadSlides(id);
   };
