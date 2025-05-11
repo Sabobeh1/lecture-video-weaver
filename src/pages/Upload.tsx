@@ -5,12 +5,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useUploads } from "@/hooks/useUploads";
 import { VideoCard } from "@/components/dashboard/VideoCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Eye, Pencil, Play } from "lucide-react";
 
 const Upload = () => {
   const { uploads, loading } = useUploads();
+  const [showAllUploads, setShowAllUploads] = useState(false);
   
-  // Get the most recent uploads (limited to 2)
+  // Get the most recent uploads (limited to 2) for the condensed view
   const recentUploads = uploads.slice(0, 2);
+  
+  // Format date for the table
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
 
   return (
     <AppLayout title="Upload Slides" subtitle="Upload your presentation slides to create a video lecture">
@@ -45,21 +64,85 @@ const Upload = () => {
               ))}
             </div>
           </div>
-        ) : recentUploads.length > 0 ? (
+        ) : uploads.length > 0 ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-heading font-semibold">Recent Uploads</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentUploads.map((upload) => (
-                <VideoCard 
-                  key={upload.id} 
-                  id={upload.id}
-                  title={upload.title}
-                  thumbnailUrl={upload.thumbnailUrl}
-                  status={upload.status}
-                  createdAt={upload.createdAt}
-                />
-              ))}
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-heading font-semibold">
+                {showAllUploads ? "All Uploads" : "Recent Uploads"}
+              </h2>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowAllUploads(!showAllUploads)}
+              >
+                {showAllUploads ? "Show Recent" : "Show All"}
+              </Button>
             </div>
+
+            {showAllUploads ? (
+              <Card>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created Date</TableHead>
+                        <TableHead>Last Updated</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {uploads.map((upload) => (
+                        <TableRow key={upload.id}>
+                          <TableCell className="font-medium">{upload.title}</TableCell>
+                          <TableCell><StatusBadge status={upload.status} /></TableCell>
+                          <TableCell>{formatDate(upload.createdAt)}</TableCell>
+                          <TableCell>{formatDate(upload.updatedAt)}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              {upload.status === "completed" ? (
+                                <Link to={`/player/${upload.id}`}>
+                                  <Button size="sm" variant="ghost">
+                                    <Play className="h-4 w-4 mr-1" /> Play
+                                  </Button>
+                                </Link>
+                              ) : (
+                                <Link to={`/preview/${upload.id}`}>
+                                  <Button size="sm" variant="ghost">
+                                    {upload.status === "error" ? (
+                                      <>
+                                        <Eye className="h-4 w-4 mr-1" /> View
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Pencil className="h-4 w-4 mr-1" /> Edit
+                                      </>
+                                    )}
+                                  </Button>
+                                </Link>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {recentUploads.map((upload) => (
+                  <VideoCard 
+                    key={upload.id} 
+                    id={upload.id}
+                    title={upload.title}
+                    thumbnailUrl={upload.thumbnailUrl}
+                    status={upload.status}
+                    createdAt={upload.createdAt}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
         
