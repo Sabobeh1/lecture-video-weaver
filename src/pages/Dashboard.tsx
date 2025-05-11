@@ -98,7 +98,6 @@ const Dashboard = () => {
                 thumbnailUrl={video.thumbnailUrl}
                 status={video.status}
                 createdAt={video.createdAt}
-                filename={video.filename}
               />
             ))}
           </div>

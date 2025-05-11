@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { 
   User, 
@@ -9,17 +8,14 @@ import {
   sendPasswordResetEmail,
   signInWithPopup
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import { toast } from "@/components/ui/sonner";
 
 interface UserProfile {
   uid: string;
   email: string | null;
-  username?: string;
-  displayName?: string;
-  photoURL?: string;
-  createdAt?: any;
+  username: string;
 }
 
 interface AuthContextType {
@@ -75,8 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         email: user.email,
-        username,
-        createdAt: serverTimestamp()
+        username
       });
       
       toast.success("Account created successfully!");
@@ -112,29 +107,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await setDoc(userDocRef, {
           uid: user.uid,
           email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          createdAt: serverTimestamp()
+          username: user.displayName || user.email?.split('@')[0] || `user_${user.uid.substring(0, 5)}`
         });
-      } else {
-        // Update existing user with potentially new Google profile info
-        await setDoc(userDocRef, {
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-        }, { merge: true });
       }
 
       toast.success("Signed in with Google successfully!");
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
-      
-      // Special handling for unauthorized domain
-      if (error.code === 'auth/unauthorized-domain') {
-        toast.error("This domain is not authorized for Google sign-in. Please add it to Firebase Auth authorized domains list.");
-      } else {
-        toast.error(error.message || "Failed to sign in with Google");
-      }
-      
+      toast.error(error.message || "Failed to sign in with Google");
       throw error;
     }
   };

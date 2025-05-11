@@ -2,7 +2,7 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Play, MoreHorizontal, RefreshCw, Pencil, Download, File } from "lucide-react";
+import { Play, MoreHorizontal, RefreshCw, Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   DropdownMenu,
@@ -13,7 +13,6 @@ import {
 import { useUploads } from "@/hooks/useUploads";
 import { UploadStatus } from "@/types/upload";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
 
 interface VideoCardProps {
   id: string;
@@ -21,23 +20,16 @@ interface VideoCardProps {
   thumbnailUrl?: string;
   status: UploadStatus;
   createdAt: string;
-  filename?: string;
 }
 
-export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename }: VideoCardProps) {
-  const { retryUpload, downloadSlides } = useUploads();
+export function VideoCard({ id, title, thumbnailUrl, status, createdAt }: VideoCardProps) {
+  const { retryUpload } = useUploads();
   const formattedDate = new Date(createdAt).toLocaleDateString();
   const isProcessing = status === "processing";
-  const isError = status === "error";
 
-  const handleRetry = async (e: React.MouseEvent<HTMLButtonElement | HTMLLIElement>) => {
+  const handleRetry = async (e: React.MouseEvent) => {
     e.preventDefault();
     await retryUpload(id);
-  };
-
-  const handleDownload = async (e: React.MouseEvent<HTMLButtonElement | HTMLLIElement>) => {
-    e.preventDefault();
-    await downloadSlides(id);
   };
 
   return (
@@ -56,7 +48,7 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-400">
-              <File size={32} className="opacity-50" />
+              No Preview
             </div>
           )}
         </div>
@@ -65,10 +57,7 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
 
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-medium text-base line-clamp-1">{title}</h3>
-            {filename && <p className="text-xs text-gray-500 mt-1">{filename}</p>}
-          </div>
+          <h3 className="font-medium text-base line-clamp-1">{title}</h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -77,12 +66,9 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link to={`/preview/${id}`}>Edit</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDownload}>Download Slides</DropdownMenuItem>
-              {isError && (
-                <DropdownMenuItem onClick={handleRetry}>Retry Processing</DropdownMenuItem>
+              <DropdownMenuItem>Edit</DropdownMenuItem>
+              {status === "completed" && (
+                <DropdownMenuItem>Download</DropdownMenuItem>
               )}
               <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
             </DropdownMenuContent>
@@ -99,23 +85,23 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
               Play Video
             </Button>
           </Link>
-        ) : isError ? (
-          <Button 
-            variant="outline" 
-            className="w-full text-red-600 border-red-200 hover:bg-red-50" 
-            size="sm"
-            onClick={handleRetry}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Retry Processing
-          </Button>
-        ) : (
+        ) : status === "pending" || status === "processing" ? (
           <Link to={`/preview/${id}`} className="w-full">
             <Button variant="outline" className="w-full" size="sm">
               <Pencil className="mr-2 h-4 w-4" />
               Preview & Edit
             </Button>
           </Link>
+        ) : (
+          <Button 
+            variant="outline" 
+            className="w-full text-red-600" 
+            size="sm"
+            onClick={handleRetry}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
         )}
       </CardFooter>
     </Card>

@@ -82,45 +82,32 @@ export function FileUploader({
       onFileSelected(file);
     }
     
-    startUpload(file);
+    simulateUpload(file);
   };
 
-  const startUpload = (file: File) => {
+  const simulateUpload = (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simulate initial upload progress for UX feedback
-    const progressInterval = setInterval(() => {
+    // Simulate upload progress
+    const interval = setInterval(() => {
       setUploadProgress(prev => {
-        if (prev >= 90) { // Cap at 90% until actual upload completes
-          clearInterval(progressInterval);
-          return 90;
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsUploading(false);
+          handleSubmitUpload(file);
+          return 100;
         }
         return prev + 5;
       });
     }, 100);
-
-    // Perform the actual upload
-    handleSubmitUpload(file).finally(() => {
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      setIsUploading(false);
-    });
   };
 
   const handleSubmitUpload = async (file: File) => {
-    try {
-      const uploadId = await createUpload(file, file.name);
-      
-      if (uploadId) {
-        // Navigate to the preview page
-        setTimeout(() => {
-          navigate(`/preview/${uploadId}`);
-        }, 1000); // Small delay to show 100% progress
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Failed to upload file");
+    const uploadId = await createUpload(file, file.name);
+    if (uploadId) {
+      // Navigate to the preview page
+      navigate(`/preview/${uploadId}`);
     }
   };
 
@@ -193,12 +180,12 @@ export function FileUploader({
             Drag & drop your slides here or click to browse
           </p>
           <p className="text-xs text-gray-400">
-            Supported formats: PDF, PPTX (max {maxSize}MB)
+            Supported formats: {allowedTypes.join(", ")} (max {maxSize}MB)
           </p>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.pptx"
+            accept={allowedTypes.join(",")}
             onChange={handleFileChange}
             className="hidden"
           />
