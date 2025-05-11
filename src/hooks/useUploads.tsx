@@ -10,12 +10,15 @@ import {
   updateDoc, 
   doc, 
   serverTimestamp, 
-  Timestamp 
+  Timestamp,
+  setDoc
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Upload, UploadStatus } from "@/types/upload";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 
 export const useUploads = () => {
   const { currentUser } = useAuth();
@@ -34,8 +37,7 @@ export const useUploads = () => {
     
     // Create a query for uploads belonging to the current user
     const uploadsQuery = query(
-      collection(db, "uploads"),
-      where("userId", "==", currentUser.uid),
+      collection(db, "users", currentUser.uid, "uploads"),
       orderBy("createdAt", "desc")
     );
 
@@ -80,35 +82,57 @@ export const useUploads = () => {
     }
     
     try {
-      // In a real app, we would upload the file to Firebase Storage first
-      // and get the download URL. For now, we'll use a placeholder URL
-      const slideUrl = URL.createObjectURL(file);
+      const uid = currentUser.uid;
+      const uploadId = uuidv4();
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+      
+      // Validate file type
+      if (!['pdf', 'pptx'].includes(fileExt)) {
+        toast.error("Only PDF and PPTX files are supported");
+        return null;
+      }
+      
+      // Create storage path and reference
+      const storagePath = `uploads/${uid}/${uploadId}.${fileExt}`;
+      const storageRef = ref(storage, storagePath);
+      
+      // Upload file to Firebase Storage
+      await uploadBytes(storageRef, file);
+      
+      // Get download URL for the file
+      const downloadURL = await getDownloadURL(storageRef);
       
       // Create a new upload document in Firestore
-      const uploadRef = await addDoc(collection(db, "uploads"), {
-        userId: currentUser.uid,
+      await setDoc(doc(db, "users", uid, "uploads", uploadId), {
+        userId: uid,
         title: title || file.name,
-        slideUrl: slideUrl,
-        status: "pending" as UploadStatus,
+        filename: file.name,
+        storagePath,
+        fileType: fileExt,
+        slideUrl: downloadURL,
+        status: "error" as UploadStatus, // Start with error status as per PRD
+        errorMessage: "Awaiting AI integration", // Default error message
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       
-      toast.success("Upload created successfully");
-      return uploadRef.id;
-    } catch (err) {
+      toast.success("Slide uploaded successfully");
+      return uploadId;
+    } catch (err: any) {
       console.error("Error creating upload:", err);
-      toast.error("Failed to create upload");
+      toast.error(`Upload failed: ${err.message}`);
       return null;
     }
   };
 
   const updateUploadStatus = async (uploadId: string, status: UploadStatus, errorMessage?: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    
     try {
-      const uploadRef = doc(db, "uploads", uploadId);
+      const uploadRef = doc(db, "users", currentUser.uid, "uploads", uploadId);
       await updateDoc(uploadRef, {
         status,
-        ...(errorMessage && { errorMessage }),
+        ...(errorMessage !== undefined && { errorMessage }),
         updatedAt: serverTimestamp()
       });
       
@@ -121,8 +145,10 @@ export const useUploads = () => {
   };
 
   const updateScript = async (uploadId: string, script: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    
     try {
-      const uploadRef = doc(db, "uploads", uploadId);
+      const uploadRef = doc(db, "users", currentUser.uid, "uploads", uploadId);
       await updateDoc(uploadRef, {
         script,
         updatedAt: serverTimestamp()
@@ -138,22 +164,43 @@ export const useUploads = () => {
   };
 
   const retryUpload = async (uploadId: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    
     try {
-      const uploadRef = doc(db, "uploads", uploadId);
+      const uploadRef = doc(db, "users", currentUser.uid, "uploads", uploadId);
       await updateDoc(uploadRef, {
         status: "pending" as UploadStatus,
         errorMessage: null,
         updatedAt: serverTimestamp()
       });
       
-      // In a real application, we would call a backend API to restart processing
-      // For example: await fetch(`/api/retry/${uploadId}`);
-      
       toast.success("Processing restarted");
       return true;
     } catch (err) {
       console.error("Error retrying upload:", err);
       toast.error("Failed to retry processing");
+      return false;
+    }
+  };
+  
+  const downloadSlides = async (uploadId: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    
+    try {
+      // Find the upload in our local state
+      const upload = uploads.find(u => u.id === uploadId);
+      
+      if (!upload || !upload.slideUrl) {
+        toast.error("Slide file not found");
+        return false;
+      }
+      
+      // Trigger download by opening the URL in a new tab
+      window.open(upload.slideUrl, '_blank');
+      return true;
+    } catch (err) {
+      console.error("Error downloading slides:", err);
+      toast.error("Failed to download slides");
       return false;
     }
   };
@@ -165,6 +212,7 @@ export const useUploads = () => {
     createUpload,
     updateUploadStatus,
     updateScript,
-    retryUpload
+    retryUpload,
+    downloadSlides
   };
 };
