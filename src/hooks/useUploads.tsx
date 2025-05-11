@@ -13,7 +13,11 @@ import {
   Timestamp,
   setDoc
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { 
+  ref, 
+  uploadBytesResumable, 
+  getDownloadURL 
+} from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Upload, UploadStatus } from "@/types/upload";
@@ -25,6 +29,7 @@ export const useUploads = () => {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!currentUser) {
@@ -96,27 +101,66 @@ export const useUploads = () => {
       const storagePath = `uploads/${uid}/${uploadId}.${fileExt}`;
       const storageRef = ref(storage, storagePath);
       
-      // Upload file to Firebase Storage
-      await uploadBytes(storageRef, file);
+      // Use uploadBytesResumable for resumable uploads and progress tracking
+      const uploadTask = uploadBytesResumable(storageRef, file);
       
-      // Get download URL for the file
-      const downloadURL = await getDownloadURL(storageRef);
+      // Register state_changed observer
+      uploadTask.on('state_changed', 
+        // Progress observer
+        (snapshot) => {
+          const progress = Math.floor((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          // Update local state with progress
+          setUploadProgress(prev => ({...prev, [uploadId]: progress}));
+        },
+        // Error observer
+        (error) => {
+          console.error("Upload error:", error);
+          toast.error(`Upload failed: ${error.message}`);
+          // Clear progress on error
+          setUploadProgress(prev => {
+            const newProgress = {...prev};
+            delete newProgress[uploadId];
+            return newProgress;
+          });
+        },
+        // Completion observer - only create Firestore doc after successful upload
+        async () => {
+          try {
+            // Get download URL once upload is complete
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            
+            // Create a new upload document in Firestore
+            await setDoc(doc(db, "users", uid, "uploads", uploadId), {
+              userId: uid,
+              title: title || file.name,
+              filename: file.name,
+              storagePath,
+              fileType: fileExt,
+              slideUrl: downloadURL,
+              status: "error" as UploadStatus, // Start with error status as per PRD
+              errorMessage: "Awaiting AI integration", // Default error message
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            
+            // Clear progress after successful upload and Firestore creation
+            setUploadProgress(prev => {
+              const newProgress = {...prev};
+              delete newProgress[uploadId];
+              return newProgress;
+            });
+            
+            toast.success("Slide uploaded successfully");
+            return uploadId;
+          } catch (err: any) {
+            console.error("Error saving to Firestore:", err);
+            toast.error(`Failed to save upload metadata: ${err.message}`);
+            return null;
+          }
+        }
+      );
       
-      // Create a new upload document in Firestore
-      await setDoc(doc(db, "users", uid, "uploads", uploadId), {
-        userId: uid,
-        title: title || file.name,
-        filename: file.name,
-        storagePath,
-        fileType: fileExt,
-        slideUrl: downloadURL,
-        status: "error" as UploadStatus, // Start with error status as per PRD
-        errorMessage: "Awaiting AI integration", // Default error message
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
-      toast.success("Slide uploaded successfully");
+      // Return the upload ID immediately to enable navigation
       return uploadId;
     } catch (err: any) {
       console.error("Error creating upload:", err);
@@ -167,6 +211,15 @@ export const useUploads = () => {
     if (!currentUser) return false;
     
     try {
+      // Find the upload in our local state first
+      const upload = uploads.find(u => u.id === uploadId);
+      
+      if (!upload) {
+        toast.error("Upload not found");
+        return false;
+      }
+      
+      // Update the status to pending
       const uploadRef = doc(db, "users", currentUser.uid, "uploads", uploadId);
       await updateDoc(uploadRef, {
         status: "pending" as UploadStatus,
@@ -209,6 +262,7 @@ export const useUploads = () => {
     uploads,
     loading,
     error,
+    uploadProgress,
     createUpload,
     updateUploadStatus,
     updateScript,

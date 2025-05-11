@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check } from "lucide-react";
+import { Upload, File, X, Check, Loader } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUploads } from "@/hooks/useUploads";
 import { useNavigate } from "react-router-dom";
@@ -21,10 +21,10 @@ export function FileUploader({
   allowedTypes = [".pdf", ".pptx"]
 }: FileUploaderProps) {
   const navigate = useNavigate();
-  const { createUpload } = useUploads();
+  const { createUpload, uploadProgress } = useUploads();
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [fileId, setFileId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +77,7 @@ export function FileUploader({
     if (!validateFile(file)) return;
     
     setSelectedFile(file);
+    setIsUploading(true);
     
     if (onFileSelected) {
       onFileSelected(file);
@@ -85,53 +86,42 @@ export function FileUploader({
     startUpload(file);
   };
 
-  const startUpload = (file: File) => {
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    // Simulate initial upload progress for UX feedback
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) { // Cap at 90% until actual upload completes
-          clearInterval(progressInterval);
-          return 90;
-        }
-        return prev + 5;
-      });
-    }, 100);
-
-    // Perform the actual upload
-    handleSubmitUpload(file).finally(() => {
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      setIsUploading(false);
-    });
-  };
-
-  const handleSubmitUpload = async (file: File) => {
+  const startUpload = async (file: File) => {
     try {
+      // Start the upload process with the createUpload function from useUploads hook
       const uploadId = await createUpload(file, file.name);
       
       if (uploadId) {
-        // Navigate to the preview page
+        setFileId(uploadId);
+        
+        // Wait for upload to complete or for user to navigate
+        // Navigation will happen after the user sees progress reach 100%
+        // or they can manually navigate by clicking on the link
         setTimeout(() => {
-          navigate(`/preview/${uploadId}`);
-        }, 1000); // Small delay to show 100% progress
+          if (uploadId) {
+            navigate(`/preview/${uploadId}`);
+          }
+        }, 1500); // Small delay after completion to show 100% progress
       }
     } catch (error) {
       console.error("Upload error:", error);
       toast.error("Failed to upload file");
+      setIsUploading(false);
     }
   };
 
   const handleRemoveFile = () => {
     setSelectedFile(null);
-    setUploadProgress(0);
+    setFileId(null);
     setIsUploading(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
+
+  // Get current progress if we have a fileId
+  const currentProgress = fileId ? uploadProgress[fileId] || 0 : 0;
+  const isComplete = currentProgress === 100;
 
   return (
     <div className="w-full">
@@ -152,7 +142,7 @@ export function FileUploader({
             <Button
               variant="ghost"
               size="icon"
-              disabled={isUploading}
+              disabled={isUploading && !isComplete}
               onClick={handleRemoveFile}
             >
               <X size={20} className="text-gray-500" />
@@ -161,16 +151,36 @@ export function FileUploader({
           
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm">
-              <span>{isUploading ? "Uploading..." : "Upload complete"}</span>
-              <span>{uploadProgress}%</span>
+              <span className="flex items-center gap-1">
+                {isUploading && !isComplete && (
+                  <Loader size={14} className="animate-spin text-blue-600" />
+                )}
+                {isComplete ? "Upload complete" : isUploading ? "Uploading..." : "Ready to upload"}
+              </span>
+              <span>{currentProgress}%</span>
             </div>
-            <Progress value={uploadProgress} className="h-2" />
+            <Progress 
+              value={currentProgress} 
+              className="h-1.5" // Thicker progress bar as per PRD
+            />
           </div>
           
-          {uploadProgress === 100 && (
+          {isComplete && (
             <div className="flex items-center gap-2 text-green-600 mt-3 text-sm">
               <Check size={16} />
               <span>Upload complete</span>
+            </div>
+          )}
+          
+          {fileId && isComplete && (
+            <div className="mt-3">
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={() => navigate(`/preview/${fileId}`)}
+              >
+                Continue to Preview
+              </Button>
             </div>
           )}
         </Card>
