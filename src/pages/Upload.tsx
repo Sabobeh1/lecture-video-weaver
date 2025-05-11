@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Eye, Pencil, Play } from "lucide-react";
 
@@ -30,6 +30,11 @@ const Upload = () => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
+
+  // Log uploads for debugging
+  useEffect(() => {
+    console.log("Current uploads:", uploads);
+  }, [uploads]);
 
   return (
     <AppLayout title="Upload Slides" subtitle="Upload your presentation slides to create a video lecture">
@@ -144,7 +149,16 @@ const Upload = () => {
               </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-heading font-semibold">Uploads</h2>
+            </div>
+            <Card className="p-6 text-center">
+              <p className="text-gray-500">No uploads found. Upload your first slides above!</p>
+            </Card>
+          </div>
+        )}
         
         <Card>
           <CardHeader>
