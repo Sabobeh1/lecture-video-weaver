@@ -2,7 +2,7 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Play, MoreHorizontal, RefreshCw, Pencil, Download, File, Loader } from "lucide-react";
+import { Play, MoreHorizontal, RefreshCw, Pencil, Download, File } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   DropdownMenu,
@@ -13,7 +13,6 @@ import {
 import { useUploads } from "@/hooks/useUploads";
 import { UploadStatus } from "@/types/upload";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
 interface VideoCardProps {
@@ -26,17 +25,14 @@ interface VideoCardProps {
 }
 
 export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename }: VideoCardProps) {
-  const { retryUpload, downloadSlides, uploadProgress } = useUploads();
+  const { retryUpload, downloadSlides } = useUploads();
   const formattedDate = new Date(createdAt).toLocaleDateString();
   const isProcessing = status === "processing";
   const isError = status === "error";
-  const currentProgress = uploadProgress[id] || 0;
-  const isUploading = currentProgress > 0 && currentProgress < 100;
 
   const handleRetry = async (e: React.MouseEvent) => {
     e.preventDefault();
     await retryUpload(id);
-    toast.success("Processing restarted");
   };
 
   const handleDownload = async (e: React.MouseEvent) => {
@@ -48,7 +44,7 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
       <div className="relative">
         <div className="aspect-video bg-gray-200 overflow-hidden">
-          {isProcessing || isUploading ? (
+          {isProcessing ? (
             <div className="w-full h-full flex items-center justify-center">
               <Skeleton className="w-full h-full" />
             </div>
@@ -64,28 +60,8 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
             </div>
           )}
         </div>
-        
-        {/* Status badge with uploading state */}
-        {isUploading ? (
-          <div className="absolute top-2 right-2 bg-blue-100 text-blue-800 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
-            <Loader size={10} className="animate-spin mr-1" />
-            Uploading
-          </div>
-        ) : (
-          <StatusBadge status={status} className="absolute top-2 right-2" />
-        )}
+        <StatusBadge status={status} className="absolute top-2 right-2" />
       </div>
-
-      {/* Upload progress bar shown during upload */}
-      {isUploading && (
-        <div className="px-4 pt-3">
-          <div className="flex justify-between items-center text-xs mb-1">
-            <span>Uploading...</span>
-            <span>{currentProgress}%</span>
-          </div>
-          <Progress value={currentProgress} className="h-1.5" />
-        </div>
-      )}
 
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
@@ -123,11 +99,6 @@ export function VideoCard({ id, title, thumbnailUrl, status, createdAt, filename
               Play Video
             </Button>
           </Link>
-        ) : isUploading ? (
-          <Button disabled variant="outline" className="w-full" size="sm">
-            <Loader className="mr-2 h-4 w-4 animate-spin" />
-            Uploading...
-          </Button>
         ) : isError ? (
           <Button 
             variant="outline" 
