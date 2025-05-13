@@ -1,11 +1,12 @@
+
 import { toast } from "sonner";
 
-// Config should be loaded from environment variables
+// Config should be loaded from import.meta.env instead of process.env
 const SSH_CONFIG = {
-  host: process.env.SSH_HOST || "176.119.254.185",
-  port: Number(process.env.SSH_PORT) || 22,
-  username: process.env.SSH_USER || "sabobeh",
-  targetDir: process.env.SSH_TARGET_DIR || "/sabobeh/FileFromUser#"
+  host: import.meta.env.VITE_SSH_HOST || "176.119.254.185",
+  port: Number(import.meta.env.VITE_SSH_PORT) || 22,
+  username: import.meta.env.VITE_SSH_USER || "sabobeh",
+  targetDir: import.meta.env.VITE_SSH_TARGET_DIR || "/sabobeh/FileFromUser#"
 };
 
 export type SSHTransferStatus = "idle" | "pending" | "transferring" | "completed" | "error";
@@ -59,7 +60,7 @@ export const transferFileToSSH = async (
         await new Promise(resolve => setTimeout(resolve, 300));
         
         // Randomly fail on first attempts to test retry logic (only in dev)
-        if (process.env.NODE_ENV === 'development' && 
+        if (import.meta.env.DEV && 
             attempt < maxAttempts && 
             progress > 50 && 
             Math.random() < 0.3) {
