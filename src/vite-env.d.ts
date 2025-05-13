@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_SSH_USER: string;
   readonly VITE_SSH_TARGET_DIR: string;
   readonly VITE_SSH_API_URL: string;
+  readonly VITE_API_URL: string;
 }
 
 interface ImportMeta {

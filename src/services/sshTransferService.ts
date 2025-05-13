@@ -167,35 +167,29 @@ const simulateSSHTransfer = async (
  */
 export const callSSHTransferAPI = async (fileUrl: string, fileName: string) => {
   try {
-    // Convert blob URL to a file or blob for upload
+    // 1. fetch the blob the user just picked
     const response = await fetch(fileUrl);
-    const fileBlob = await response.blob();
+    const blob = await response.blob();
     
     // Create a FormData object to send the file
     const formData = new FormData();
-    formData.append('file', fileBlob, fileName);
-    formData.append('sshHost', SSH_CONFIG.host);
-    formData.append('sshPort', SSH_CONFIG.port.toString());
-    formData.append('sshUsername', SSH_CONFIG.username);
-    formData.append('sshTargetDir', SSH_CONFIG.targetDir);
+    formData.append('file', new File([blob], fileName, { type: blob.type }));
     
-    // This URL should point to your actual backend API endpoint
-    // For Firebase, it could be a Cloud Function URL
-    // For a custom server, it would be your server's API endpoint
-    const apiUrl = import.meta.env.VITE_SSH_API_URL || '/api/ssh-transfer';
+    // 2. hit your Flask box. Add an env var so you switch automatically per env:
+    const apiUrl = import.meta.env.VITE_API_URL ?? "http://176.119.254.185:8000/api/upload";
     
     // Make the API call to your backend service
-    const apiResponse = await fetch(apiUrl, {
+    const res = await fetch(apiUrl, {
       method: 'POST',
       body: formData,
-      // You'd need to include authentication headers here
+      credentials: "include",
     });
     
-    if (!apiResponse.ok) {
-      throw new Error(`API error: ${apiResponse.status}`);
+    if (!res.ok) {
+      throw new Error(`Upload failed: ${res.statusText}`);
     }
     
-    return await apiResponse.json();
+    return await res.json(); // { success: true, public_url: "...", ... }
   } catch (error) {
     console.error('SSH transfer API error:', error);
     throw error;
