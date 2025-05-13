@@ -1,5 +1,6 @@
 
 export type UploadStatus = "pending" | "processing" | "completed" | "error";
+export type SSHTransferStatus = "idle" | "pending" | "transferring" | "completed" | "error";
 
 export interface Upload {
   id: string;
@@ -10,7 +11,10 @@ export interface Upload {
   videoUrl?: string;
   thumbnailUrl?: string;
   status: UploadStatus;
+  sshStatus?: SSHTransferStatus;
+  sshProgress?: number;
   errorMessage?: string;
+  sshErrorMessage?: string;
   createdAt: string;
   updatedAt: string;
 }

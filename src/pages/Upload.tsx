@@ -13,14 +13,14 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, SSHStatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Eye, Pencil, Play } from "lucide-react";
+import { Eye, Pencil, Play, Archive, RefreshCw } from "lucide-react";
 
 const Upload = () => {
-  const { uploads, loading } = useUploads();
+  const { uploads, loading, retrySSHTransfer } = useUploads();
   const [showAllUploads, setShowAllUploads] = useState(false);
   
   // Get the most recent uploads (limited to 2) for the condensed view
@@ -35,6 +35,11 @@ const Upload = () => {
   useEffect(() => {
     console.log("Current uploads:", uploads);
   }, [uploads]);
+
+  // Handle retry SSH transfer
+  const handleRetrySSHTransfer = async (uploadId: string) => {
+    await retrySSHTransfer(uploadId);
+  };
 
   return (
     <AppLayout title="Upload Slides" subtitle="Upload your presentation slides to create a video lecture">
@@ -91,6 +96,7 @@ const Upload = () => {
                       <TableRow>
                         <TableHead>Title</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Archive Status</TableHead>
                         <TableHead>Created Date</TableHead>
                         <TableHead>Last Updated</TableHead>
                         <TableHead>Actions</TableHead>
@@ -101,6 +107,20 @@ const Upload = () => {
                         <TableRow key={upload.id}>
                           <TableCell className="font-medium">{upload.title}</TableCell>
                           <TableCell><StatusBadge status={upload.status} /></TableCell>
+                          <TableCell>
+                            <SSHStatusBadge status={upload.sshStatus || "idle"} />
+                            {upload.sshStatus === "error" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-2 h-6 p-1"
+                                onClick={() => handleRetrySSHTransfer(upload.id)}
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                <span className="sr-only">Retry Archive</span>
+                              </Button>
+                            )}
+                          </TableCell>
                           <TableCell>{formatDate(upload.createdAt)}</TableCell>
                           <TableCell>{formatDate(upload.updatedAt)}</TableCell>
                           <TableCell>
@@ -143,6 +163,8 @@ const Upload = () => {
                     title={upload.title}
                     thumbnailUrl={upload.thumbnailUrl}
                     status={upload.status}
+                    sshStatus={upload.sshStatus}
+                    sshProgress={upload.sshProgress}
                     createdAt={upload.createdAt}
                   />
                 ))}

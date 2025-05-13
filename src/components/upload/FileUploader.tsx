@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check } from "lucide-react";
+import { Upload, File, X, Check, Archive, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUploads } from "@/hooks/useUploads";
 import { useNavigate } from "react-router-dom";
@@ -158,6 +158,13 @@ export function FileUploader({
             <div className="flex items-center gap-2 text-green-600 mt-3 text-sm">
               <Check size={16} />
               <span>Upload complete</span>
+            </div>
+          )}
+          
+          {uploadProgress === 100 && (
+            <div className="flex items-center gap-2 text-blue-600 mt-1 text-sm">
+              <Archive size={16} />
+              <span>Archiving to SSH server...</span>
             </div>
           )}
         </Card>
