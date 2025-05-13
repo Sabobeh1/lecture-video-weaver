@@ -1,13 +1,13 @@
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check, Archive, RefreshCw, Info, AlertTriangle } from "lucide-react";
+import { Upload, File, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUploads } from "@/hooks/useUploads";
 import { useNavigate } from "react-router-dom";
+import { uploadFile } from "@/services/uploadService";
 
 interface FileUploaderProps {
   onFileSelected?: (file: File) => void;
@@ -82,46 +82,39 @@ export function FileUploader({
       onFileSelected(file);
     }
     
-    simulateUpload(file);
+    handleUpload(file);
   };
 
-  const simulateUpload = (file: File) => {
+  const handleUpload = async (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          handleSubmitUpload(file);
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 100);
-  };
+    try {
+      // Create upload record in Firestore
+      const uploadId = await createUpload(file, file.name);
+      
+      if (!uploadId) {
+        throw new Error("Failed to create upload record");
+      }
 
-  const handleSubmitUpload = async (file: File) => {
-    if (import.meta.env.DEV) {
-      toast.info(
-        <div className="flex flex-col gap-1">
-          <div className="font-semibold flex items-center gap-1">
-            <AlertTriangle size={16} className="text-amber-500" /> Development Mode Notice
-          </div>
-          <p className="text-sm">
-            In development mode, SSH transfer is simulated. For production, set up a backend service to handle actual file transfers.
-          </p>
-        </div>,
-        { duration: 8000 }
-      );
-    }
+      // Upload file to server
+      const result = await uploadFile(file);
+      
+      if (!result.success) {
+        throw new Error("Upload failed");
+      }
 
-    const uploadId = await createUpload(file, file.name);
-    if (uploadId) {
+      setUploadProgress(100);
+      toast.success("Upload completed successfully");
+      
       // Navigate to the preview page
       navigate(`/preview/${uploadId}`);
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error(error instanceof Error ? error.message : "Upload failed");
+      setUploadProgress(0);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -172,24 +165,6 @@ export function FileUploader({
             <div className="flex items-center gap-2 text-green-600 mt-3 text-sm">
               <Check size={16} />
               <span>Upload complete</span>
-            </div>
-          )}
-          
-          {uploadProgress === 100 && (
-            <div className="flex items-center gap-2 text-blue-600 mt-1 text-sm">
-              <Archive size={16} />
-              <span>Transferring to SSH server...</span>
-            </div>
-          )}
-
-          {uploadProgress === 100 && import.meta.env.DEV && (
-            <div className="bg-amber-50 border border-amber-200 p-2 rounded mt-3 text-xs text-amber-700">
-              <div className="flex items-start">
-                <Info size={14} className="mt-0.5 mr-1 flex-shrink-0" />
-                <span>
-                  <strong>Development Mode:</strong> SSH transfers are simulated. For actual transfers, implement a backend API service that handles SSH connections.
-                </span>
-              </div>
             </div>
           )}
         </Card>
