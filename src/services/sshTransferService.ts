@@ -6,7 +6,7 @@ const SSH_CONFIG = {
   host: import.meta.env.VITE_SSH_HOST || "176.119.254.185",
   port: Number(import.meta.env.VITE_SSH_PORT) || 22,
   username: import.meta.env.VITE_SSH_USER || "sabobeh",
-  targetDir: import.meta.env.VITE_SSH_TARGET_DIR || "/sabobeh/FileFromUser#"
+  targetDir: import.meta.env.VITE_SSH_TARGET_DIR || "/sabobeh/FileFromUser"
 };
 
 export type SSHTransferStatus = "idle" | "pending" | "transferring" | "completed" | "error";
@@ -19,34 +19,92 @@ export interface SSHTransferProgress {
 }
 
 /**
- * Initiates an SSH transfer to the configured server
- * Note: This function is a mock implementation as browsers cannot directly connect via SSH
- * In production, this would call a backend API (e.g. Firebase Function) that handles the SSH transfer
+ * IMPORTANT: Browser Limitation Notice
+ * Due to security restrictions, browsers cannot directly connect to SSH servers.
+ * This function is a placeholder that shows how to integrate with a backend API service.
+ * In production, you MUST implement a backend service (like Firebase Cloud Functions, Express server, etc.)
+ * that handles the actual SSH transfer.
  */
 export const transferFileToSSH = async (
   fileUrl: string,
   fileName: string,
   onProgress?: (progress: SSHTransferProgress) => void
 ): Promise<boolean> => {
-  // In a real implementation, this would call a backend API endpoint
-  // that handles the SSH transfer securely
+  // In development mode only - simulate the transfer
+  if (import.meta.env.DEV) {
+    return simulateSSHTransfer(fileUrl, fileName, onProgress);
+  }
   
+  // In production - call the real backend API
+  try {
+    if (onProgress) {
+      onProgress({
+        status: "pending",
+        progress: 0,
+        attempt: 1
+      });
+    }
+    
+    // This is where you would call your actual backend API
+    const result = await callSSHTransferAPI(fileUrl, fileName);
+    
+    if (result.success) {
+      if (onProgress) {
+        onProgress({
+          status: "completed",
+          progress: 100,
+          attempt: 1
+        });
+      }
+      return true;
+    } else {
+      if (onProgress) {
+        onProgress({
+          status: "error",
+          progress: 0,
+          attempt: 1,
+          error: result.error || "Transfer failed"
+        });
+      }
+      toast.error("Failed to transfer file to SSH server");
+      return false;
+    }
+  } catch (error) {
+    console.error("SSH transfer error:", error);
+    if (onProgress) {
+      onProgress({
+        status: "error",
+        progress: 0,
+        attempt: 1,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+    toast.error("Error connecting to SSH transfer service");
+    return false;
+  }
+};
+
+// Simulation function for development testing
+const simulateSSHTransfer = async (
+  fileUrl: string,
+  fileName: string,
+  onProgress?: (progress: SSHTransferProgress) => void
+): Promise<boolean> => {
   let attempt = 1;
   const maxAttempts = 3;
   const backoffDelay = 1000; // Starting delay in ms
   
   while (attempt <= maxAttempts) {
     try {
-      // Notify of attempt start
       if (onProgress) {
         onProgress({
           status: "transferring",
           progress: 0,
-          attempt: attempt
+          attempt
         });
       }
       
-      // Simulate transfer progress in chunks
+      // Simulate progress in chunks
       for (let progress = 0; progress <= 100; progress += 10) {
         if (onProgress) {
           onProgress({
@@ -56,20 +114,15 @@ export const transferFileToSSH = async (
           });
         }
         
-        // Simulate network delays
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Randomly fail on first attempts to test retry logic (only in dev)
-        if (import.meta.env.DEV && 
-            attempt < maxAttempts && 
-            progress > 50 && 
-            Math.random() < 0.3) {
+        // Randomly fail on first attempts to test retry logic
+        if (attempt < maxAttempts && progress > 50 && Math.random() < 0.3) {
           throw new Error("Simulated network failure");
         }
       }
       
-      // Success - log and return
-      console.log(`SSH Transfer completed: ${fileName} to ${SSH_CONFIG.host}:${SSH_CONFIG.targetDir}`);
+      console.log(`[DEV SIMULATION] SSH Transfer would send: ${fileName} to ${SSH_CONFIG.host}:${SSH_CONFIG.targetDir}`);
       
       if (onProgress) {
         onProgress({
@@ -82,7 +135,7 @@ export const transferFileToSSH = async (
       return true;
       
     } catch (error) {
-      console.error(`SSH Transfer failed (attempt ${attempt}/${maxAttempts}):`, error);
+      console.error(`SSH Transfer simulation failed (attempt ${attempt}/${maxAttempts}):`, error);
       
       if (onProgress) {
         onProgress({
@@ -93,13 +146,11 @@ export const transferFileToSSH = async (
         });
       }
       
-      // If we've reached max attempts, give up
       if (attempt >= maxAttempts) {
         toast.error(`Failed to archive file after ${maxAttempts} attempts`);
         return false;
       }
       
-      // Otherwise, wait with exponential backoff before trying again
       const delay = backoffDelay * Math.pow(2, attempt - 1);
       await new Promise(resolve => setTimeout(resolve, delay));
       attempt++;
@@ -109,26 +160,42 @@ export const transferFileToSSH = async (
   return false;
 };
 
-// For future implementation: real SSH transfer via backend API
+/**
+ * This is the function that would call your actual backend API
+ * You need to implement a backend service (Firebase Function, Express server, etc.)
+ * that handles the SSH connection and file transfer.
+ */
 export const callSSHTransferAPI = async (fileUrl: string, fileName: string) => {
   try {
-    // This would be an actual API call to your backend service
-    const response = await fetch('/api/ssh-transfer', {
+    // Convert blob URL to a file or blob for upload
+    const response = await fetch(fileUrl);
+    const fileBlob = await response.blob();
+    
+    // Create a FormData object to send the file
+    const formData = new FormData();
+    formData.append('file', fileBlob, fileName);
+    formData.append('sshHost', SSH_CONFIG.host);
+    formData.append('sshPort', SSH_CONFIG.port.toString());
+    formData.append('sshUsername', SSH_CONFIG.username);
+    formData.append('sshTargetDir', SSH_CONFIG.targetDir);
+    
+    // This URL should point to your actual backend API endpoint
+    // For Firebase, it could be a Cloud Function URL
+    // For a custom server, it would be your server's API endpoint
+    const apiUrl = import.meta.env.VITE_SSH_API_URL || '/api/ssh-transfer';
+    
+    // Make the API call to your backend service
+    const apiResponse = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fileUrl,
-        fileName,
-      }),
+      body: formData,
+      // You'd need to include authentication headers here
     });
     
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+    if (!apiResponse.ok) {
+      throw new Error(`API error: ${apiResponse.status}`);
     }
     
-    return await response.json();
+    return await apiResponse.json();
   } catch (error) {
     console.error('SSH transfer API error:', error);
     throw error;

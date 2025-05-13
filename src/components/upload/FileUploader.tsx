@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check, Archive, RefreshCw, Info } from "lucide-react";
+import { Upload, File, X, Check, Archive, RefreshCw, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUploads } from "@/hooks/useUploads";
 import { useNavigate } from "react-router-dom";
@@ -104,18 +104,19 @@ export function FileUploader({
   };
 
   const handleSubmitUpload = async (file: File) => {
-    // Show an informative toast about the SSH simulation
-    toast.info(
-      <div className="flex flex-col gap-1">
-        <div className="font-semibold flex items-center gap-1">
-          <Info size={16} /> SSH Transfer Simulation
-        </div>
-        <p className="text-sm">
-          In this demo, SSH transfer is simulated. In production, a backend service would handle the actual SSH transfer.
-        </p>
-      </div>,
-      { duration: 5000 }
-    );
+    if (import.meta.env.DEV) {
+      toast.info(
+        <div className="flex flex-col gap-1">
+          <div className="font-semibold flex items-center gap-1">
+            <AlertTriangle size={16} className="text-amber-500" /> Development Mode Notice
+          </div>
+          <p className="text-sm">
+            In development mode, SSH transfer is simulated. For production, set up a backend service to handle actual file transfers.
+          </p>
+        </div>,
+        { duration: 8000 }
+      );
+    }
 
     const uploadId = await createUpload(file, file.name);
     if (uploadId) {
@@ -177,15 +178,17 @@ export function FileUploader({
           {uploadProgress === 100 && (
             <div className="flex items-center gap-2 text-blue-600 mt-1 text-sm">
               <Archive size={16} />
-              <span>Simulating archival to SSH server...</span>
+              <span>Transferring to SSH server...</span>
             </div>
           )}
 
-          {uploadProgress === 100 && (
-            <div className="bg-blue-50 border border-blue-200 p-2 rounded mt-3 text-xs text-blue-700">
+          {uploadProgress === 100 && import.meta.env.DEV && (
+            <div className="bg-amber-50 border border-amber-200 p-2 rounded mt-3 text-xs text-amber-700">
               <div className="flex items-start">
                 <Info size={14} className="mt-0.5 mr-1 flex-shrink-0" />
-                <span>Note: This is a simulation. To implement actual SSH transfer, a backend service would be required.</span>
+                <span>
+                  <strong>Development Mode:</strong> SSH transfers are simulated. For actual transfers, implement a backend API service that handles SSH connections.
+                </span>
               </div>
             </div>
           )}

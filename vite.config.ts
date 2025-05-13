@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => ({
     "import.meta.env.VITE_SSH_HOST": JSON.stringify(process.env.VITE_SSH_HOST || "176.119.254.185"),
     "import.meta.env.VITE_SSH_PORT": JSON.stringify(process.env.VITE_SSH_PORT || "22"),
     "import.meta.env.VITE_SSH_USER": JSON.stringify(process.env.VITE_SSH_USER || "sabobeh"),
-    "import.meta.env.VITE_SSH_TARGET_DIR": JSON.stringify(process.env.VITE_SSH_TARGET_DIR || "/sabobeh/FileFromUser#"),
+    "import.meta.env.VITE_SSH_TARGET_DIR": JSON.stringify(process.env.VITE_SSH_TARGET_DIR || "/sabobeh/FileFromUser"),
+    "import.meta.env.VITE_SSH_API_URL": JSON.stringify(process.env.VITE_SSH_API_URL || ""),
   }
 }));
