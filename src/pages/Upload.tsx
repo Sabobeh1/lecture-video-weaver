@@ -1,6 +1,7 @@
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { FileUploader } from "@/components/upload/FileUploader";
+import { VideoUploader } from "@/components/upload/VideoUploader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUploads } from "@/hooks/useUploads";
 import { VideoCard } from "@/components/dashboard/VideoCard";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge, SSHStatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Eye, Pencil, Play, Archive, RefreshCw } from "lucide-react";
@@ -44,17 +46,33 @@ const Upload = () => {
   return (
     <AppLayout title="Upload Slides" subtitle="Upload your presentation slides to create a video lecture">
       <div className="space-y-8">
-        <Card>
+        <Tabs defaultValue="standard" className="w-full">
           <CardHeader>
-            <CardTitle>Upload Slides</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Upload Slides</CardTitle>
+              <TabsList>
+                <TabsTrigger value="standard">Standard Upload</TabsTrigger>
+                <TabsTrigger value="preview">Quick Preview</TabsTrigger>
+              </TabsList>
+            </div>
             <CardDescription>
               Upload your PDF or PowerPoint slides to generate an AI-narrated video lecture
             </CardDescription>
           </CardHeader>
+          
           <CardContent className="space-y-6">
-            <FileUploader />
+            <TabsContent value="standard">
+              <FileUploader />
+            </TabsContent>
+            
+            <TabsContent value="preview">
+              <VideoUploader 
+                loadingDelay={12}
+                videoPath="/videoplayback.mp4"
+              />
+            </TabsContent>
           </CardContent>
-        </Card>
+        </Tabs>
         
         {loading ? (
           <div className="space-y-4">
