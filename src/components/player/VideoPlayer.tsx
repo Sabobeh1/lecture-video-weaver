@@ -147,12 +147,11 @@ export function VideoPlayer({
       className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
       onMouseMove={handleMouseMove}
     >
-      <video
-        ref={videoRef}
-        src={src}
-        className="w-full h-full"
-        onClick={togglePlayPause}
-      />
+      <video ref={videoRef} className="w-full h-full" onClick={togglePlayPause} controls={false} playsInline>
+        <source src="/attach/videoplayback.mp4" type="video/mp4" />
+        <source src="/attach/videoplayback.webm" type="video/webm" />
+        Your browser does not support the video tag.
+      </video>
       
       <div 
         className={cn(
