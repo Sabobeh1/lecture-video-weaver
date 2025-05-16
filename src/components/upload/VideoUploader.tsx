@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check, Loader2 } from "lucide-react";
+import { Upload, File as FileIcon, X, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 
@@ -13,18 +13,41 @@ interface VideoUploaderProps {
   videoPath?: string;
 }
 
+interface SavedVideoData {
+  fileName: string;
+  fileSize: number;
+  lastModified?: number;
+}
+
+const LOCAL_STORAGE_KEY = "saved_preview_video";
+
 export function VideoUploader({ 
   loadingDelay = 10, 
   videoPath = "/videoplayback.mp4" // Path should be in public folder
 }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [savedVideoData, setSavedVideoData] = useState<SavedVideoData | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved video data on component mount
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedData) {
+        const parsedData = JSON.parse(savedData) as SavedVideoData;
+        setSavedVideoData(parsedData);
+        setIsVideoReady(true);
+      }
+    } catch (error) {
+      console.error("Error parsing saved video data:", error);
+    }
+  }, []);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -70,7 +93,7 @@ export function VideoUploader({
         if (prev >= 100) {
           clearInterval(interval);
           setIsUploading(false);
-          handleUploadComplete();
+          handleUploadComplete(file);
           return 100;
         }
         return prev + 5;
@@ -78,7 +101,22 @@ export function VideoUploader({
     }, 100);
   };
 
-  const handleUploadComplete = () => {
+  const handleUploadComplete = (file: File) => {
+    // Save file metadata to local storage
+    const videoData: SavedVideoData = {
+      fileName: file.name,
+      fileSize: file.size,
+      lastModified: file.lastModified
+    };
+    
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(videoData));
+      setSavedVideoData(videoData);
+    } catch (error) {
+      console.error("Error saving video data to local storage:", error);
+      toast.error("Failed to save video information");
+    }
+    
     // Start loading phase after upload completes
     setIsLoading(true);
 
@@ -99,11 +137,16 @@ export function VideoUploader({
 
   const handleRemoveFile = () => {
     setSelectedFile(null);
+    setSavedVideoData(null);
     setUploadProgress(0);
     setIsUploading(false);
     setIsLoading(false);
     setIsVideoReady(false);
     setVideoError(null);
+    
+    // Clear local storage
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -131,7 +174,7 @@ export function VideoUploader({
       {isVideoReady ? (
         <div className="space-y-4">
           <div className="flex justify-between">
-            <h3 className="text-lg font-medium">{selectedFile?.name}</h3>
+            <h3 className="text-lg font-medium">{selectedFile?.name || savedVideoData?.fileName}</h3>
             <Button 
               variant="outline" 
               size="sm" 
@@ -159,7 +202,7 @@ export function VideoUploader({
           ) : (
             <VideoPlayer 
               src={videoPath}
-              title={selectedFile?.name || "Lecture Video"}
+              title={selectedFile?.name || savedVideoData?.fileName || "Lecture Video"}
               allowDownload={false}
             />
           )}
@@ -176,7 +219,7 @@ export function VideoUploader({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div className="bg-primary-100 p-2 rounded">
-                <File size={24} className="text-primary" />
+                <FileIcon size={24} className="text-primary" />
               </div>
               <div>
                 <p className="font-medium line-clamp-1">{selectedFile.name}</p>
