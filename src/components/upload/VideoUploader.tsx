@@ -4,13 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check, Loader2 } from "lucide-react";
+import { Upload, File, X, Check, Loader2, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 
 interface VideoUploaderProps {
   loadingDelay?: number; // in seconds
   videoPath?: string;
+}
+
+interface SavedVideoData {
+  fileName: string;
+  videoPath: string;
+  timestamp: number;
 }
 
 export function VideoUploader({ 
@@ -24,7 +30,24 @@ export function VideoUploader({
   const [isLoading, setIsLoading] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [savedVideoPath, setSavedVideoPath] = useState<string>(videoPath);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved video data from localStorage on component mount
+  useEffect(() => {
+    const savedData = localStorage.getItem("savedVideoData");
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData) as SavedVideoData;
+        setSavedVideoPath(parsedData.videoPath);
+        setIsVideoReady(true);
+        setSelectedFile(new File([], parsedData.fileName));
+      } catch (error) {
+        console.error("Error parsing saved video data:", error);
+        localStorage.removeItem("savedVideoData");
+      }
+    }
+  }, []);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -70,7 +93,7 @@ export function VideoUploader({
         if (prev >= 100) {
           clearInterval(interval);
           setIsUploading(false);
-          handleUploadComplete();
+          handleUploadComplete(file);
           return 100;
         }
         return prev + 5;
@@ -78,7 +101,7 @@ export function VideoUploader({
     }, 100);
   };
 
-  const handleUploadComplete = () => {
+  const handleUploadComplete = (file: File) => {
     // Start loading phase after upload completes
     setIsLoading(true);
 
@@ -86,14 +109,17 @@ export function VideoUploader({
     setTimeout(() => {
       setIsLoading(false);
       
-      // Check if video exists (in a real app, this would be an API call or file check)
-      // For now, we'll just simulate success
-      try {
-        setIsVideoReady(true);
-      } catch (error) {
-        setVideoError("Could not load video. The file may not exist or is in an unsupported format.");
-        toast.error("Error loading video file");
-      }
+      // Save video information to localStorage
+      const videoData: SavedVideoData = {
+        fileName: file.name,
+        videoPath: videoPath, // using the default video for this example
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem("savedVideoData", JSON.stringify(videoData));
+      setSavedVideoPath(videoPath);
+      setIsVideoReady(true);
+      toast.success("Video processed and saved to local storage!");
     }, loadingDelay * 1000); // Convert seconds to milliseconds
   };
 
@@ -104,6 +130,9 @@ export function VideoUploader({
     setIsLoading(false);
     setIsVideoReady(false);
     setVideoError(null);
+    setSavedVideoPath(videoPath);
+    // Clear localStorage
+    localStorage.removeItem("savedVideoData");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -113,7 +142,7 @@ export function VideoUploader({
   useEffect(() => {
     if (isVideoReady) {
       const video = document.createElement('video');
-      video.src = videoPath;
+      video.src = savedVideoPath;
       video.onloadeddata = () => {
         // Video exists and is loaded
         console.log("Video file loaded successfully");
@@ -124,21 +153,23 @@ export function VideoUploader({
         setIsVideoReady(false);
       };
     }
-  }, [isVideoReady, videoPath]);
+  }, [isVideoReady, savedVideoPath]);
 
   return (
     <div className="w-full">
       {isVideoReady ? (
         <div className="space-y-4">
           <div className="flex justify-between">
-            <h3 className="text-lg font-medium">{selectedFile?.name}</h3>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRemoveFile}
-            >
-              Upload Another File
-            </Button>
+            <h3 className="text-lg font-medium">{selectedFile?.name || "Saved Video"}</h3>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRemoveFile}
+              >
+                Upload Another File
+              </Button>
+            </div>
           </div>
           
           {videoError ? (
@@ -158,7 +189,7 @@ export function VideoUploader({
             </Card>
           ) : (
             <VideoPlayer 
-              src={videoPath}
+              src={savedVideoPath}
               title={selectedFile?.name || "Lecture Video"}
               allowDownload={false}
             />
