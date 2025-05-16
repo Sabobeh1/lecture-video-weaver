@@ -1,7 +1,6 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Upload, File as FileIcon, X, Check, Loader2 } from "lucide-react";
@@ -17,13 +16,14 @@ interface SavedVideoData {
   fileName: string;
   fileSize: number;
   lastModified?: number;
+  objectUrl?: string; // Store the object URL for the video file
 }
 
 const LOCAL_STORAGE_KEY = "saved_preview_video";
 
 export function VideoUploader({ 
   loadingDelay = 10, 
-  videoPath = "/videoplayback.mp4" // Path should be in public folder
+  videoPath = "/videoplayback.mp4" // Default fallback path
 }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -33,7 +33,9 @@ export function VideoUploader({
   const [isLoading, setIsLoading] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string>(videoPath);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   // Load saved video data on component mount
   useEffect(() => {
@@ -42,11 +44,31 @@ export function VideoUploader({
       if (savedData) {
         const parsedData = JSON.parse(savedData) as SavedVideoData;
         setSavedVideoData(parsedData);
+        
+        // If we have a File object from a previous upload, try to create a new object URL
+        if (selectedFile) {
+          const newObjectUrl = URL.createObjectURL(selectedFile);
+          objectUrlRef.current = newObjectUrl;
+          setVideoUrl(newObjectUrl);
+        } else if (parsedData.objectUrl) {
+          // Otherwise use the saved object URL if available (might not work across sessions)
+          setVideoUrl(parsedData.objectUrl);
+        }
+        
         setIsVideoReady(true);
       }
     } catch (error) {
       console.error("Error parsing saved video data:", error);
     }
+  }, []);
+
+  // Clean up object URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
   }, []);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -102,40 +124,48 @@ export function VideoUploader({
   };
 
   const handleUploadComplete = (file: File) => {
-    // Save file metadata to local storage
-    const videoData: SavedVideoData = {
-      fileName: file.name,
-      fileSize: file.size,
-      lastModified: file.lastModified
-    };
-    
     try {
+      // Create object URL for video playback
+      const objectUrl = URL.createObjectURL(file);
+      objectUrlRef.current = objectUrl;
+      
+      // Set the video URL to the object URL
+      setVideoUrl(objectUrl);
+
+      // Save file metadata and object URL to local storage
+      const videoData: SavedVideoData = {
+        fileName: file.name,
+        fileSize: file.size,
+        lastModified: file.lastModified,
+        objectUrl: objectUrl
+      };
+      
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(videoData));
       setSavedVideoData(videoData);
-    } catch (error) {
-      console.error("Error saving video data to local storage:", error);
-      toast.error("Failed to save video information");
-    }
-    
-    // Start loading phase after upload completes
-    setIsLoading(true);
-
-    // Simulate processing delay
-    setTimeout(() => {
-      setIsLoading(false);
       
-      // Check if video exists (in a real app, this would be an API call or file check)
-      // For now, we'll just simulate success
-      try {
+      // Start loading phase after upload completes
+      setIsLoading(true);
+
+      // Simulate processing delay
+      setTimeout(() => {
+        setIsLoading(false);
         setIsVideoReady(true);
-      } catch (error) {
-        setVideoError("Could not load video. The file may not exist or is in an unsupported format.");
-        toast.error("Error loading video file");
-      }
-    }, loadingDelay * 1000); // Convert seconds to milliseconds
+      }, loadingDelay * 1000); // Convert seconds to milliseconds
+      
+    } catch (error) {
+      console.error("Error processing video:", error);
+      setVideoError("Could not process video file. The file may be corrupted or in an unsupported format.");
+      toast.error("Error processing video file");
+    }
   };
 
   const handleRemoveFile = () => {
+    // Revoke the object URL if it exists
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    
     setSelectedFile(null);
     setSavedVideoData(null);
     setUploadProgress(0);
@@ -143,6 +173,7 @@ export function VideoUploader({
     setIsLoading(false);
     setIsVideoReady(false);
     setVideoError(null);
+    setVideoUrl(videoPath); // Reset to default video path
     
     // Clear local storage
     localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -151,23 +182,6 @@ export function VideoUploader({
       fileInputRef.current.value = "";
     }
   };
-
-  // Test if video path is accessible
-  useEffect(() => {
-    if (isVideoReady) {
-      const video = document.createElement('video');
-      video.src = videoPath;
-      video.onloadeddata = () => {
-        // Video exists and is loaded
-        console.log("Video file loaded successfully");
-      };
-      video.onerror = () => {
-        setVideoError("Could not load video. The file may not exist or is in an unsupported format.");
-        toast.error("Error loading video file");
-        setIsVideoReady(false);
-      };
-    }
-  }, [isVideoReady, videoPath]);
 
   return (
     <div className="w-full">
@@ -201,7 +215,7 @@ export function VideoUploader({
             </Card>
           ) : (
             <VideoPlayer 
-              src={videoPath}
+              src={videoUrl}
               title={selectedFile?.name || savedVideoData?.fileName || "Lecture Video"}
               allowDownload={false}
             />
@@ -277,7 +291,7 @@ export function VideoUploader({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.ppt,.pptx"
+            accept="video/*,.pdf,.ppt,.pptx"
             onChange={handleFileChange}
             className="hidden"
           />
