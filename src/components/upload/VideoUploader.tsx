@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,7 +17,6 @@ interface SavedVideoData {
   fileName: string;
   fileSize: number;
   lastModified?: number;
-  objectUrl?: string; // Store the object URL for the video file
 }
 
 const LOCAL_STORAGE_KEY = "saved_preview_video";
@@ -40,27 +40,53 @@ export function VideoUploader({
   // Load saved video data on component mount
   useEffect(() => {
     try {
+      // First try to load metadata from localStorage
       const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const savedVideoBlob = localStorage.getItem(`${LOCAL_STORAGE_KEY}_blob`);
+      
       if (savedData) {
         const parsedData = JSON.parse(savedData) as SavedVideoData;
         setSavedVideoData(parsedData);
         
-        // If we have a File object from a previous upload, try to create a new object URL
-        if (selectedFile) {
-          const newObjectUrl = URL.createObjectURL(selectedFile);
-          objectUrlRef.current = newObjectUrl;
-          setVideoUrl(newObjectUrl);
-        } else if (parsedData.objectUrl) {
-          // Otherwise use the saved object URL if available (might not work across sessions)
-          setVideoUrl(parsedData.objectUrl);
+        // If we have a blob in localStorage, use it
+        if (savedVideoBlob) {
+          try {
+            // Convert base64 to blob
+            const byteCharacters = atob(savedVideoBlob);
+            const byteArrays = [];
+            
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+              const slice = byteCharacters.slice(offset, offset + 512);
+              
+              const byteNumbers = new Array(slice.length);
+              for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+              }
+              
+              const byteArray = new Uint8Array(byteNumbers);
+              byteArrays.push(byteArray);
+            }
+            
+            const blob = new Blob(byteArrays, { type: 'video/mp4' });
+            const newObjectUrl = URL.createObjectURL(blob);
+            objectUrlRef.current = newObjectUrl;
+            setVideoUrl(newObjectUrl);
+            setIsVideoReady(true);
+          } catch (error) {
+            console.error("Error converting saved blob:", error);
+            setVideoUrl(videoPath);
+          }
+        } else {
+          // Fall back to default video if blob isn't available
+          setVideoUrl(videoPath);
+          setIsVideoReady(true);
         }
-        
-        setIsVideoReady(true);
       }
     } catch (error) {
       console.error("Error parsing saved video data:", error);
+      setVideoError("Could not load saved video. Please upload a new one.");
     }
-  }, []);
+  }, [videoPath]);
 
   // Clean up object URLs when component unmounts
   useEffect(() => {
@@ -127,21 +153,38 @@ export function VideoUploader({
     try {
       // Create object URL for video playback
       const objectUrl = URL.createObjectURL(file);
+      
+      // Store the previous objectURL to revoke it
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+      
+      // Update the current objectURL reference
       objectUrlRef.current = objectUrl;
       
       // Set the video URL to the object URL
       setVideoUrl(objectUrl);
 
-      // Save file metadata and object URL to local storage
+      // Save file metadata to local storage
       const videoData: SavedVideoData = {
         fileName: file.name,
         fileSize: file.size,
-        lastModified: file.lastModified,
-        objectUrl: objectUrl
+        lastModified: file.lastModified
       };
       
+      // Save metadata
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(videoData));
       setSavedVideoData(videoData);
+      
+      // Save blob as base64 string for persistence across sessions
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        // Remove the data URL prefix and store only the base64 part
+        const base64Content = base64data.split(',')[1];
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_blob`, base64Content);
+      };
       
       // Start loading phase after upload completes
       setIsLoading(true);
@@ -150,12 +193,13 @@ export function VideoUploader({
       setTimeout(() => {
         setIsLoading(false);
         setIsVideoReady(true);
+        toast.success("Video uploaded successfully!");
       }, loadingDelay * 1000); // Convert seconds to milliseconds
       
     } catch (error) {
       console.error("Error processing video:", error);
       setVideoError("Could not process video file. The file may be corrupted or in an unsupported format.");
-      toast.error("Error processing video file");
+      toast.error("Error loading video file");
     }
   };
 
@@ -177,10 +221,13 @@ export function VideoUploader({
     
     // Clear local storage
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_blob`);
     
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+    
+    toast.info("Video removed");
   };
 
   return (
