@@ -1,9 +1,9 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Download, Play, Pause, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface VideoPlayerProps {
   src: string;
@@ -26,6 +26,7 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,10 +41,12 @@ export function VideoPlayer({
     
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
+      setError(null);
     };
     
     const handlePlay = () => {
       setIsPlaying(true);
+      setError(null);
     };
     
     const handlePause = () => {
@@ -53,12 +56,38 @@ export function VideoPlayer({
     const handleEnded = () => {
       setIsPlaying(false);
     };
+
+    const handleError = (e: Event) => {
+      const videoElement = e.target as HTMLVideoElement;
+      let errorMessage = "An error occurred while playing the video.";
+      
+      if (videoElement.error) {
+        switch (videoElement.error.code) {
+          case 1:
+            errorMessage = "The video loading was aborted.";
+            break;
+          case 2:
+            errorMessage = "Network error occurred while loading the video.";
+            break;
+          case 3:
+            errorMessage = "The video could not be decoded.";
+            break;
+          case 4:
+            errorMessage = "The video format is not supported.";
+            break;
+        }
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
+    };
     
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("play", handlePlay);
     video.addEventListener("pause", handlePause);
     video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
     
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
@@ -66,6 +95,7 @@ export function VideoPlayer({
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
     };
   }, []);
 
@@ -98,7 +128,14 @@ export function VideoPlayer({
     if (!video) return;
     
     if (video.paused) {
-      video.play();
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error("Error playing video:", error);
+          setError("Failed to play video. Please try again.");
+          toast.error("Failed to play video. Please try again.");
+        });
+      }
     } else {
       video.pause();
     }
@@ -147,12 +184,27 @@ export function VideoPlayer({
       className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
       onMouseMove={handleMouseMove}
     >
-      <video
-        ref={videoRef}
-        src={src}
-        className="w-full h-full"
-        onClick={togglePlayPause}
-      />
+      <video ref={videoRef} className="w-full h-full" onClick={togglePlayPause} controls={false} playsInline>
+        <source src="/attach/videoplayback.mp4" type="video/mp4" />
+        <source src="/attach/videoplayback.webm" type="video/webm" />
+        Your browser does not support the video tag.
+      </video>
+      
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="text-white text-center p-4">
+            <p className="font-medium mb-2">Error Playing Video</p>
+            <p className="text-sm">{error}</p>
+            <Button 
+              variant="outline" 
+              className="mt-4 text-white border-white hover:bg-white/20"
+              onClick={togglePlayPause}
+            >
+              Try Again
+            </Button>
+          </div>
+        </div>
+      )}
       
       <div 
         className={cn(
@@ -180,42 +232,40 @@ export function VideoPlayer({
           </span>
         </div>
         
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white rounded-full h-8 w-8"
+            onClick={togglePlayPause}
+          >
+            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          </Button>
+          
+          <div 
+            className="relative"
+            onMouseEnter={() => setShowVolumeSlider(true)}
+            onMouseLeave={() => setShowVolumeSlider(false)}
+          >
             <Button
               variant="ghost"
               size="icon"
               className="text-white rounded-full h-8 w-8"
-              onClick={togglePlayPause}
+              onClick={toggleMute}
             >
-              {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+              {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
             </Button>
             
-            <div 
-              className="relative"
-              onMouseEnter={() => setShowVolumeSlider(true)}
-              onMouseLeave={() => setShowVolumeSlider(false)}
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white rounded-full h-8 w-8"
-                onClick={toggleMute}
-              >
-                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-              </Button>
-              
-              {showVolumeSlider && (
-                <div className="absolute bottom-full left-2 p-3 bg-black/90 rounded-md mb-2 w-32">
-                  <Slider
-                    value={[isMuted ? 0 : volume]}
-                    max={1}
-                    step={0.01}
-                    onValueChange={handleVolumeChange}
-                  />
-                </div>
-              )}
-            </div>
+            {showVolumeSlider && (
+              <div className="absolute bottom-full left-2 p-3 bg-black/90 rounded-md mb-2 w-32">
+                <Slider
+                  value={[isMuted ? 0 : volume]}
+                  max={1}
+                  step={0.01}
+                  onValueChange={handleVolumeChange}
+                />
+              </div>
+            )}
           </div>
           
           {allowDownload && (
@@ -231,7 +281,7 @@ export function VideoPlayer({
         </div>
       </div>
       
-      {!isPlaying && controlsVisible && (
+      {!isPlaying && !error && (
         <Button
           variant="ghost"
           size="icon"

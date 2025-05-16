@@ -10,7 +10,7 @@ from google.cloud import firestore
 
 # ---------------- basic config ----------------
 UPLOAD_DIR = "/sabobeh/FileFromUser"
-ALLOWED = {"pdf", "ppt", "pptx"}               # limit extensions
+ALLOWED = {"pdf", "ppt", "pptx", "mp4", "avi", "mov", "mkv"}               # limit extensions
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)         # ensure local dir exists
 
