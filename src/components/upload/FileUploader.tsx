@@ -4,11 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File, X, Check } from "lucide-react";
+import { Upload, File, X, Check, Archive, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUploads } from "@/hooks/useUploads";
 import { useNavigate } from "react-router-dom";
-import { uploadFile } from "@/services/uploadService";
 
 interface FileUploaderProps {
   onFileSelected?: (file: File) => void;
@@ -83,39 +82,32 @@ export function FileUploader({
       onFileSelected(file);
     }
     
-    handleUpload(file);
+    simulateUpload(file);
   };
 
-  const handleUpload = async (file: File) => {
+  const simulateUpload = (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
 
-    try {
-      // Create upload record in Firestore
-      const uploadId = await createUpload(file, file.name);
-      
-      if (!uploadId) {
-        throw new Error("Failed to create upload record");
-      }
+    // Simulate upload progress
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsUploading(false);
+          handleSubmitUpload(file);
+          return 100;
+        }
+        return prev + 5;
+      });
+    }, 100);
+  };
 
-      // Upload file to server
-      const result = await uploadFile(file);
-      
-      if (!result.success) {
-        throw new Error("Upload failed");
-      }
-
-      setUploadProgress(100);
-      toast.success("Upload completed successfully");
-      
+  const handleSubmitUpload = async (file: File) => {
+    const uploadId = await createUpload(file, file.name);
+    if (uploadId) {
       // Navigate to the preview page
       navigate(`/preview/${uploadId}`);
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error(error instanceof Error ? error.message : "Upload failed");
-      setUploadProgress(0);
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -166,6 +158,13 @@ export function FileUploader({
             <div className="flex items-center gap-2 text-green-600 mt-3 text-sm">
               <Check size={16} />
               <span>Upload complete</span>
+            </div>
+          )}
+          
+          {uploadProgress === 100 && (
+            <div className="flex items-center gap-2 text-blue-600 mt-1 text-sm">
+              <Archive size={16} />
+              <span>Archiving to SSH server...</span>
             </div>
           )}
         </Card>
