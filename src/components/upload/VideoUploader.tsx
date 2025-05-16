@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,7 +31,6 @@ export function VideoUploader({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [savedVideoPath, setSavedVideoPath] = useState<string>(videoPath);
-  const [savedFileName, setSavedFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load saved video data from localStorage on component mount
@@ -40,8 +40,8 @@ export function VideoUploader({
       try {
         const parsedData = JSON.parse(savedData) as SavedVideoData;
         setSavedVideoPath(parsedData.videoPath);
-        setSavedFileName(parsedData.fileName);
         setIsVideoReady(true);
+        setSelectedFile(new File([], parsedData.fileName));
       } catch (error) {
         console.error("Error parsing saved video data:", error);
         localStorage.removeItem("savedVideoData");
@@ -118,7 +118,6 @@ export function VideoUploader({
       
       localStorage.setItem("savedVideoData", JSON.stringify(videoData));
       setSavedVideoPath(videoPath);
-      setSavedFileName(file.name);
       setIsVideoReady(true);
       toast.success("Video processed and saved to local storage!");
     }, loadingDelay * 1000); // Convert seconds to milliseconds
@@ -132,7 +131,6 @@ export function VideoUploader({
     setIsVideoReady(false);
     setVideoError(null);
     setSavedVideoPath(videoPath);
-    setSavedFileName("");
     // Clear localStorage
     localStorage.removeItem("savedVideoData");
     if (fileInputRef.current) {
@@ -162,7 +160,7 @@ export function VideoUploader({
       {isVideoReady ? (
         <div className="space-y-4">
           <div className="flex justify-between">
-            <h3 className="text-lg font-medium">{savedFileName || "Saved Video"}</h3>
+            <h3 className="text-lg font-medium">{selectedFile?.name || "Saved Video"}</h3>
             <div className="flex gap-2">
               <Button 
                 variant="outline" 
@@ -192,7 +190,7 @@ export function VideoUploader({
           ) : (
             <VideoPlayer 
               src={savedVideoPath}
-              title={savedFileName || "Lecture Video"}
+              title={selectedFile?.name || "Lecture Video"}
               allowDownload={false}
             />
           )}
