@@ -1,9 +1,10 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { Download, Play, Pause, Volume2, VolumeX } from "lucide-react";
+import { Download, Play, Pause, Volume2, VolumeX, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface VideoPlayerProps {
   src: string;
@@ -26,6 +27,7 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,6 +42,7 @@ export function VideoPlayer({
     
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
+      setError(null);
     };
     
     const handlePlay = () => {
@@ -53,12 +56,19 @@ export function VideoPlayer({
     const handleEnded = () => {
       setIsPlaying(false);
     };
+
+    const handleError = (e: ErrorEvent) => {
+      console.error("Video error:", e);
+      setError("Failed to load video. The file may be corrupted or in an unsupported format.");
+      toast.error("Error loading video");
+    };
     
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("play", handlePlay);
     video.addEventListener("pause", handlePause);
     video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
     
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
@@ -66,6 +76,7 @@ export function VideoPlayer({
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
     };
   }, []);
 
@@ -98,7 +109,10 @@ export function VideoPlayer({
     if (!video) return;
     
     if (video.paused) {
-      video.play();
+      video.play().catch(err => {
+        console.error("Error playing video:", err);
+        toast.error("Failed to play video");
+      });
     } else {
       video.pause();
     }
@@ -142,14 +156,32 @@ export function VideoPlayer({
     }
   };
 
+  if (error) {
+    return (
+      <Card className="p-8 text-center">
+        <div className="text-red-500 mb-4">
+          <AlertTriangle size={48} className="mx-auto" />
+        </div>
+        <p className="text-gray-800 font-medium mb-2">Video Error</p>
+        <p className="text-gray-600">{error}</p>
+      </Card>
+    );
+  }
+
   return (
     <div 
       className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
       onMouseMove={handleMouseMove}
     >
-      <video ref={videoRef} className="w-full h-full" onClick={togglePlayPause} controls={false} playsInline>
-        <source src="/attach/videoplayback.mp4" type="video/mp4" />
-        <source src="/attach/videoplayback.webm" type="video/webm" />
+      <video 
+        ref={videoRef} 
+        className="w-full h-full" 
+        onClick={togglePlayPause} 
+        controls={false} 
+        playsInline
+        autoPlay
+      >
+        <source src={src} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
       

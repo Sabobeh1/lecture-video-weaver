@@ -8,6 +8,7 @@ import { Upload, File, X, Check, Archive, RefreshCw, Info, AlertTriangle } from 
 import { cn } from "@/lib/utils";
 import { useUploads } from "@/hooks/useUploads";
 import { useNavigate } from "react-router-dom";
+import { VideoUploader } from "@/components/upload/VideoUploader";
 
 interface FileUploaderProps {
   onFileSelected?: (file: File) => void;
@@ -26,6 +27,7 @@ export function FileUploader({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [showVideoUploader, setShowVideoUploader] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -120,8 +122,7 @@ export function FileUploader({
 
     const uploadId = await createUpload(file, file.name);
     if (uploadId) {
-      // Navigate to the preview page
-      navigate(`/preview/${uploadId}`);
+      setShowVideoUploader(true);
     }
   };
 
@@ -129,10 +130,22 @@ export function FileUploader({
     setSelectedFile(null);
     setUploadProgress(0);
     setIsUploading(false);
+    setShowVideoUploader(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
+
+  if (showVideoUploader && selectedFile) {
+    return (
+      <div className="space-y-4">
+        <VideoUploader 
+          loadingDelay={12}
+          file={selectedFile}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -182,7 +195,7 @@ export function FileUploader({
             </div>
           )}
 
-          {uploadProgress === 100 && import.meta.env.DEV && (
+          {import.meta.env.DEV && (
             <div className="bg-amber-50 border border-amber-200 p-2 rounded mt-3 text-xs text-amber-700">
               <div className="flex items-start">
                 <Info size={14} className="mt-0.5 mr-1 flex-shrink-0" />
