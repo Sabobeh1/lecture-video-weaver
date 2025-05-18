@@ -31,7 +31,6 @@ export function VideoUploader({
   const [savedVideoData, setSavedVideoData] = useState<SavedVideoData | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>(videoPath);
@@ -160,7 +159,7 @@ export function VideoUploader({
           if (prev >= 95) {
             return 95;
           }
-          return prev + 1;
+          return prev + 5;
         });
       }, 500);
       
@@ -259,7 +258,6 @@ export function VideoUploader({
     setUploadProgress(0);
     setIsUploading(false);
     setIsGeneratingVideo(false);
-    setIsLoading(false);
     setIsVideoReady(false);
     setVideoError(null);
     setVideoUrl(videoPath); // Reset to default video path
@@ -321,7 +319,7 @@ export function VideoUploader({
             <VideoPlayer 
               src={videoUrl}
               title={selectedFile?.name || savedVideoData?.fileName || "Lecture Video"}
-              allowDownload={false}
+              allowDownload={true}
             />
           )}
         </div>
