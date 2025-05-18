@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -26,8 +25,22 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [videoSource, setVideoSource] = useState<string>(src);
   
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handle changes to src prop, especially for base64 or data URLs
+  useEffect(() => {
+    if (src.startsWith('data:') || src.startsWith('blob:')) {
+      setVideoSource(src);
+    } else if (src.startsWith('/')) {
+      // For local paths, keep as is
+      setVideoSource(src);
+    } else {
+      // For remote URLs, keep as is
+      setVideoSource(src);
+    }
+  }, [src]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -147,9 +160,14 @@ export function VideoPlayer({
       className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
       onMouseMove={handleMouseMove}
     >
-      <video ref={videoRef} className="w-full h-full" onClick={togglePlayPause} controls={false} playsInline>
-        <source src="/attach/videoplayback.mp4" type="video/mp4" />
-        <source src="/attach/videoplayback.webm" type="video/webm" />
+      <video 
+        ref={videoRef} 
+        className="w-full h-full" 
+        onClick={togglePlayPause} 
+        controls={false} 
+        playsInline
+      >
+        <source src={videoSource} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
       

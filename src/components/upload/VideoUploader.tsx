@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import { Upload, File as FileIcon, X, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
+import { generateVideo, saveVideoToLocalStorage, blobToBase64 } from "@/services/videoService";
+import { v4 as uuidv4 } from 'uuid';
 
 interface VideoUploaderProps {
-  loadingDelay?: number; // in seconds
+  loadingDelay?: number;
   videoPath?: string;
 }
 
@@ -23,7 +25,7 @@ const LOCAL_STORAGE_KEY = "saved_preview_video";
 
 export function VideoUploader({ 
   loadingDelay = 10, 
-  videoPath = "/videoplayback.mp4" // Default fallback path
+  videoPath = "/videoplayback.mp4"
 }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -34,13 +36,14 @@ export function VideoUploader({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>(videoPath);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load saved video data on component mount
   useEffect(() => {
     try {
-      // First try to load metadata from localStorage
       const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
       const savedVideoBlob = localStorage.getItem(`${LOCAL_STORAGE_KEY}_blob`);
       
@@ -48,10 +51,8 @@ export function VideoUploader({
         const parsedData = JSON.parse(savedData) as SavedVideoData;
         setSavedVideoData(parsedData);
         
-        // If we have a blob in localStorage, use it
         if (savedVideoBlob) {
           try {
-            // Convert base64 to blob
             const byteCharacters = atob(savedVideoBlob);
             const byteArrays = [];
             
@@ -77,7 +78,6 @@ export function VideoUploader({
             setVideoUrl(videoPath);
           }
         } else {
-          // Fall back to default video if blob isn't available
           setVideoUrl(videoPath);
           setIsVideoReady(true);
         }
@@ -93,6 +93,10 @@ export function VideoUploader({
     return () => {
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
+      }
+      
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, []);
@@ -125,34 +129,66 @@ export function VideoUploader({
   };
 
   const processFile = (file: File) => {
+    // Validate file size (20MB max)
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > 20) {
+      toast.error("File is too large. Maximum size is 20MB.");
+      return;
+    }
+    
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+      toast.error("Only PDF files are allowed.");
+      return;
+    }
+    
     setSelectedFile(file);
-    simulateUpload(file);
+    handleVideoGeneration(file);
   };
 
-  const simulateUpload = (file: File) => {
+  const handleVideoGeneration = async (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
     setIsVideoReady(false);
     setVideoError(null);
-
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          handleUploadComplete(file);
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 100);
+    setIsGeneratingVideo(true);
+    
+    try {
+      // Create a progress interval to show some feedback
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          // Max at 95% until we actually get the video
+          if (prev >= 95) {
+            return 95;
+          }
+          return prev + 1;
+        });
+      }, 500);
+      
+      // Upload PDF and generate video
+      const videoBlob = await generateVideo(file);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      if (videoBlob) {
+        await handleUploadComplete(file, videoBlob);
+      } else {
+        throw new Error("Failed to generate video");
+      }
+    } catch (error) {
+      console.error("Video generation error:", error);
+      setVideoError("Failed to generate video. Please try again.");
+      setIsUploading(false);
+      setIsGeneratingVideo(false);
+      toast.error("Failed to generate video");
+    }
   };
 
-  const handleUploadComplete = (file: File) => {
+  const handleUploadComplete = async (file: File, videoBlob: Blob) => {
     try {
       // Create object URL for video playback
-      const objectUrl = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(videoBlob);
       
       // Store the previous objectURL to revoke it
       if (objectUrlRef.current) {
@@ -176,29 +212,32 @@ export function VideoUploader({
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(videoData));
       setSavedVideoData(videoData);
       
-      // Save blob as base64 string for persistence across sessions
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = () => {
-        const base64data = reader.result as string;
-        // Remove the data URL prefix and store only the base64 part
-        const base64Content = base64data.split(',')[1];
-        localStorage.setItem(`${LOCAL_STORAGE_KEY}_blob`, base64Content);
-      };
+      // Convert blob to base64 and save
+      const base64data = await blobToBase64(videoBlob);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_blob`, base64data);
       
-      // Start loading phase after upload completes
-      setIsLoading(true);
-
-      // Simulate processing delay
-      setTimeout(() => {
-        setIsLoading(false);
-        setIsVideoReady(true);
-        toast.success("Video uploaded successfully!");
-      }, loadingDelay * 1000); // Convert seconds to milliseconds
+      // Save to videos collection for Dashboard/My Videos
+      const videoId = uuidv4();
+      saveVideoToLocalStorage({
+        id: videoId,
+        title: file.name.replace('.pdf', ''),
+        fileSize: file.size,
+        createdAt: new Date().toISOString(),
+        videoBlob: base64data,
+        status: "completed"
+      });
+      
+      // Finish the upload process
+      setIsUploading(false);
+      setIsGeneratingVideo(false);
+      setIsVideoReady(true);
+      toast.success("Video generated successfully!");
       
     } catch (error) {
       console.error("Error processing video:", error);
       setVideoError("Could not process video file. The file may be corrupted or in an unsupported format.");
+      setIsUploading(false);
+      setIsGeneratingVideo(false);
       toast.error("Error loading video file");
     }
   };
@@ -210,10 +249,17 @@ export function VideoUploader({
       objectUrlRef.current = null;
     }
     
+    // Abort any ongoing requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
     setSelectedFile(null);
     setSavedVideoData(null);
     setUploadProgress(0);
     setIsUploading(false);
+    setIsGeneratingVideo(false);
     setIsLoading(false);
     setIsVideoReady(false);
     setVideoError(null);
@@ -228,6 +274,18 @@ export function VideoUploader({
     }
     
     toast.info("Video removed");
+  };
+
+  const cancelGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    setIsUploading(false);
+    setIsGeneratingVideo(false);
+    setUploadProgress(0);
+    toast.info("Video generation cancelled");
   };
 
   return (
@@ -268,12 +326,21 @@ export function VideoUploader({
             />
           )}
         </div>
-      ) : isLoading ? (
+      ) : isGeneratingVideo ? (
         <Card className="p-8 flex flex-col items-center justify-center min-h-[300px]">
           <Loader2 size={48} className="text-primary animate-spin mb-4" />
-          <p className="text-lg font-medium mb-2">Processing your slides...</p>
-          <p className="text-gray-500 mb-4">This may take a few moments</p>
-          <Button variant="outline" onClick={handleRemoveFile}>Cancel</Button>
+          <p className="text-lg font-medium mb-2">Generating your video via AI...</p>
+          <p className="text-gray-500 mb-4">This may take up to a minute</p>
+          
+          <div className="w-full max-w-md space-y-2 mb-4">
+            <div className="flex justify-between items-center text-sm">
+              <span>Processing...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <Progress value={uploadProgress} className="h-2" />
+          </div>
+          
+          <Button variant="outline" onClick={cancelGeneration}>Cancel</Button>
         </Card>
       ) : selectedFile ? (
         <Card className="p-4">
@@ -328,17 +395,17 @@ export function VideoUploader({
           <div className="bg-gray-100 p-3 rounded-full mb-4">
             <Upload size={24} className="text-gray-500" />
           </div>
-          <h3 className="text-lg font-medium mb-1">Upload Slide Lectures</h3>
+          <h3 className="text-lg font-medium mb-1">Upload PDF Slides</h3>
           <p className="text-sm text-gray-500 text-center mb-4">
-            Drag & drop your slides here or click to browse
+            Drag & drop your PDF here or click to browse
           </p>
           <p className="text-xs text-gray-400">
-            Supported formats: .pdf, .ppt, .pptx
+            Maximum file size: 20MB
           </p>
           <input
             ref={fileInputRef}
             type="file"
-            accept="video/*,.pdf,.ppt,.pptx"
+            accept="application/pdf"
             onChange={handleFileChange}
             className="hidden"
           />

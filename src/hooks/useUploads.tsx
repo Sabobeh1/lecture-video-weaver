@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Upload, UploadStatus, SSHTransferStatus } from "@/types/upload";
 import { toast } from "sonner";
 import { transferFileToSSH, SSHTransferProgress } from "@/services/sshTransferService";
+import { getVideosFromLocalStorage, updateVideoInLocalStorage } from "@/services/videoService";
 
 export const useUploads = () => {
   const { currentUser } = useAuth();
@@ -58,14 +59,66 @@ export const useUploads = () => {
           } as Upload;
         });
         
-        setUploads(uploadData);
+        // Get videos from local storage and integrate with Firestore data
+        try {
+          const localVideos = getVideosFromLocalStorage();
+          const localVideoUploads = localVideos.map(video => ({
+            id: video.id,
+            userId: currentUser.uid,
+            title: video.title,
+            slideUrl: "",
+            videoUrl: `data:video/mp4;base64,${video.videoBlob}`,
+            thumbnailUrl: "/placeholder.svg", // Placeholder thumbnail
+            status: video.status as UploadStatus,
+            sshStatus: "completed" as SSHTransferStatus,
+            sshProgress: 100,
+            createdAt: video.createdAt,
+            updatedAt: video.createdAt,
+          }));
+
+          // Combine and deduplicate (local storage takes precedence)
+          const localIds = new Set(localVideoUploads.map(v => v.id));
+          const combinedUploads = [
+            ...localVideoUploads,
+            ...uploadData.filter(u => !localIds.has(u.id))
+          ];
+          
+          setUploads(combinedUploads);
+        } catch (err) {
+          console.error("Error processing local videos:", err);
+          setUploads(uploadData);
+        }
+        
         setLoading(false);
       },
       (err) => {
         console.error("Error getting uploads:", err);
         setError(err);
         setLoading(false);
-        toast.error("Failed to load your uploads");
+        
+        // Even if Firestore fails, try to load local videos
+        try {
+          const localVideos = getVideosFromLocalStorage();
+          if (currentUser) {
+            const localVideoUploads = localVideos.map(video => ({
+              id: video.id,
+              userId: currentUser.uid,
+              title: video.title,
+              slideUrl: "",
+              videoUrl: `data:video/mp4;base64,${video.videoBlob}`,
+              thumbnailUrl: "/placeholder.svg", // Placeholder thumbnail
+              status: video.status as UploadStatus,
+              sshStatus: "completed" as SSHTransferStatus,
+              sshProgress: 100,
+              createdAt: video.createdAt,
+              updatedAt: video.createdAt,
+            }));
+            setUploads(localVideoUploads);
+          }
+        } catch (localErr) {
+          console.error("Error loading local videos:", localErr);
+          toast.error("Failed to load your uploads");
+        }
       }
     );
 
@@ -73,6 +126,7 @@ export const useUploads = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Keep the rest of the original functions
   const createUpload = async (file: File, title: string): Promise<string | null> => {
     if (!currentUser) {
       toast.error("You must be logged in to upload files");
