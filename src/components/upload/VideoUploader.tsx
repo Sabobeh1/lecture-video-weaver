@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Upload, File as FileIcon, X, Check, Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
-import axios from 'axios';
 
 interface VideoUploaderProps {
   loadingDelay?: number; // in seconds
@@ -23,16 +22,6 @@ interface SavedVideoData {
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 const AI_SERVICE_URL = "http://176.119.254.185:7111/generate-video";
 const STORAGE_KEY = "saved_video_data";
-
-// Create axios instance with default config
-const api = axios.create({
-  baseURL: AI_SERVICE_URL,
-  headers: {
-    'Content-Type': 'multipart/form-data',
-    'Accept': 'application/json',
-  },
-  withCredentials: true, // This is important for CORS
-});
 
 export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -163,27 +152,21 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await api.post('', formData, {
+      const response = await fetch(AI_SERVICE_URL, {
+        method: 'POST',
+        body: formData,
         signal: abortControllerRef.current.signal,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setUploadProgress(progress);
-          }
-        },
       });
 
       console.log("AI Service Response:", response);
 
-      if (response.status !== 200) {
-        throw new Error(response.data?.error || `HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       // Get the video blob from the response
-      const videoBlob = new Blob([response.data], { type: 'video/mp4' });
+      const videoBlob = await response.blob();
       
       // Convert blob to base64 for storage
       const reader = new FileReader();
@@ -212,22 +195,10 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
       };
       
     } catch (error: any) {
-      if (axios.isCancel(error)) {
+      if (error.name === 'AbortError') {
         toast.info("Upload cancelled");
-      } else if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error("Error response:", error.response.data);
-        setVideoError(error.response.data?.error || "Failed to generate video");
-        toast.error(error.response.data?.error || "Error generating video");
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error("No response received:", error.request);
-        setVideoError("No response from server");
-        toast.error("No response from server");
       } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error("Error setting up request:", error.message);
+        console.error("Error generating video:", error);
         setVideoError(error.message || "Failed to generate video");
         toast.error("Error generating video");
       }
