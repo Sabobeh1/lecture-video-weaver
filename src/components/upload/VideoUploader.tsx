@@ -7,8 +7,7 @@ import { toast } from "sonner";
 import { Upload, File as FileIcon, X, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
-import { generateVideo, saveVideoToLocalStorage, blobToBase64 } from "@/services/videoService";
-import { v4 as uuidv4 } from 'uuid';
+import { generateVideo, saveVideoToLocalStorage, blobToBase64, generateId } from "@/services/videoService";
 
 interface VideoUploaderProps {
   loadingDelay?: number;
@@ -217,7 +216,7 @@ export function VideoUploader({
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_blob`, base64data);
       
       // Save to videos collection for Dashboard/My Videos
-      const videoId = uuidv4();
+      const videoId = generateId();
       saveVideoToLocalStorage({
         id: videoId,
         title: file.name.replace('.pdf', ''),

@@ -89,6 +89,11 @@ export const updateVideoInLocalStorage = (id: string, updates: Partial<VideoData
   }
 };
 
+// Generate a random id
+export const generateId = (): string => {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
+
 // Helper function to convert blob to base64
 export const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
