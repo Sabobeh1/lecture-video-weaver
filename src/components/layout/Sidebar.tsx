@@ -107,13 +107,7 @@ export function Sidebar({ className }: SidebarProps) {
           active={isActive("/videos")}
           collapsed={collapsed}
         />
-        <NavItem
-          icon={Play}
-          label="Video Player"
-          href="/player"
-          active={isActive("/player")}
-          collapsed={collapsed}
-        />
+        
       </div>
       
       <div className="mt-auto border-t p-2">

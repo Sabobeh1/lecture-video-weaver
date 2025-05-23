@@ -32,7 +32,7 @@ export const googleProvider = new GoogleAuthProvider();
 
 // Connect to Firestore emulator in development if needed
 // if (process.env.NODE_ENV === 'development') {
-//   connectFirestoreEmulator(db, 'localhost', 8080);
+//   connectFirestoreEmulator(db, 'localhost', 7100);
 // }
 
 export { app, analytics };

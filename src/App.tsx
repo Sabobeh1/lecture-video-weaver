@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
 import Preview from "./pages/Preview";
 import VideoPlayerPage from "./pages/VideoPlayer";
+import MyVideos from "./pages/MyVideos";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -42,7 +42,7 @@ const App = () => (
               <Route path="/upload" element={<Upload />} />
               <Route path="/preview/:id" element={<Preview />} />
               <Route path="/player/:id" element={<VideoPlayerPage />} />
-              <Route path="/videos" element={<Dashboard />} />
+              <Route path="/videos" element={<MyVideos />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             
