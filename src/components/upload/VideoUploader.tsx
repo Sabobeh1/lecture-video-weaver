@@ -3,25 +3,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, File as FileIcon, X, Check, Loader2, AlertTriangle } from "lucide-react";
+import { Upload, File as FileIcon, X, Check, Loader2, AlertTriangle, HardDrive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
+import { videoStorageService, VideoData, StorageQuota } from "@/services/videoStorageService";
 
 interface VideoUploaderProps {
   loadingDelay?: number; // in seconds
   file?: File;
 }
 
-interface SavedVideoData {
-  fileName: string;
-  fileSize: number;
-  videoBlob: string; // Base64 encoded video
-  timestamp: number;
-}
-
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 const AI_SERVICE_URL = "http://176.119.254.185:7111/generate-video";
-const STORAGE_KEY = "saved_video_data";
 
 export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -32,6 +25,8 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const [storageQuota, setStorageQuota] = useState<StorageQuota | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -41,40 +36,38 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
     }
   }, [file]);
 
-  // Load saved video on component mount
+  // Initialize storage and load saved video on component mount
   useEffect(() => {
-    try {
-      const savedData = localStorage.getItem(STORAGE_KEY);
-      if (savedData) {
-        const { fileName, videoBlob } = JSON.parse(savedData) as SavedVideoData;
+    const initializeStorage = async () => {
+      try {
+        // Request storage quota increase
+        await videoStorageService.requestStorageQuota();
         
-        // Convert base64 to blob
-        const byteCharacters = atob(videoBlob);
-        const byteArrays = [];
+        // Get current quota information
+        const quota = await videoStorageService.getStorageQuota();
+        setStorageQuota(quota);
         
-        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-          const slice = byteCharacters.slice(offset, offset + 512);
-          const byteNumbers = new Array(slice.length);
+        // Migrate any existing localStorage data
+        await videoStorageService.migrateFromLocalStorage();
+        
+        // Load most recent video
+        const savedVideo = await videoStorageService.loadMostRecentVideo();
+        if (savedVideo) {
+          const objectUrl = URL.createObjectURL(savedVideo.videoBlob);
+          setVideoUrl(objectUrl);
+          setSelectedFile(new File([savedVideo.videoBlob], savedVideo.fileName, { type: 'video/mp4' }));
+          setCurrentVideoId(savedVideo.id);
+          setIsVideoReady(true);
           
-          for (let i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
-          }
-          
-          const byteArray = new Uint8Array(byteNumbers);
-          byteArrays.push(byteArray);
+          console.log(`Loaded saved video: ${savedVideo.fileName} (${formatFileSize(savedVideo.fileSize)})`);
         }
-        
-        const blob = new Blob(byteArrays, { type: 'video/mp4' });
-        const objectUrl = URL.createObjectURL(blob);
-        
-        setVideoUrl(objectUrl);
-        setSelectedFile(new File([blob], fileName, { type: 'video/mp4' }));
-        setIsVideoReady(true);
+      } catch (error) {
+        console.error("Error initializing video storage:", error);
+        toast.error("Failed to initialize video storage");
       }
-    } catch (error) {
-      console.error("Error loading saved video:", error);
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    };
+
+    initializeStorage();
   }, []);
 
   // Clean up object URLs when component unmounts
@@ -85,6 +78,14 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
       }
     };
   }, [videoUrl]);
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const validateFile = (file: File): boolean => {
     // Check file size
@@ -124,17 +125,13 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    console.log("hello a");
     if (files && files.length > 0) {
       processFile(files[0]);
     }
   };
 
   const processFile = (file: File) => {
-    console.log("hello b");
-
     if (!validateFile(file)) return;
-    console.log("hello c");
     setSelectedFile(file);
     uploadToAIService(file);
   };
@@ -149,6 +146,7 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
     abortControllerRef.current = new AbortController();
 
     try {
+      console.log("Uploading to AI service...");
       const formData = new FormData();
       formData.append('file', file);
 
@@ -168,31 +166,55 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
       // Get the video blob from the response
       const videoBlob = await response.blob();
       
-      // Convert blob to base64 for storage
-      const reader = new FileReader();
-      reader.readAsDataURL(videoBlob);
+      // Check storage space before saving
+      const { sufficient, quota } = await videoStorageService.checkStorageSpace(videoBlob.size);
+      setStorageQuota(quota);
       
-      reader.onloadend = () => {
-        const base64data = reader.result as string;
-        // Remove the data URL prefix and store only the base64 part
-        const base64Content = base64data.split(',')[1];
-        
-        // Save to localStorage
-        const videoData: SavedVideoData = {
-          fileName: file.name,
-          fileSize: videoBlob.size,
-          videoBlob: base64Content,
-          timestamp: Date.now()
-        };
-        
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(videoData));
+      if (!sufficient) {
+        toast.error(
+          <div className="space-y-2">
+            <div className="font-semibold">Insufficient Storage Space</div>
+            <div className="text-sm">
+              Video size: {formatFileSize(videoBlob.size)}<br/>
+              Available: {formatFileSize(quota.available)}<br/>
+              Total quota: {formatFileSize(quota.quota)}
+            </div>
+          </div>,
+          { duration: 10000 }
+        );
+        setVideoError("Insufficient storage space for video");
+        return;
+      }
+      
+      // Save video to IndexedDB
+      try {
+        const videoId = await videoStorageService.saveVideo(file.name, videoBlob);
+        setCurrentVideoId(videoId);
         
         // Create object URL for immediate playback
         const videoObjectUrl = URL.createObjectURL(videoBlob);
         setVideoUrl(videoObjectUrl);
         setIsVideoReady(true);
-        toast.success("Video generated successfully!");
-      };
+        
+        // Update quota display
+        const updatedQuota = await videoStorageService.getStorageQuota();
+        setStorageQuota(updatedQuota);
+        
+        toast.success(
+          <div className="space-y-1">
+            <div className="font-semibold">Video generated successfully!</div>
+            <div className="text-sm">Saved: {formatFileSize(videoBlob.size)}</div>
+          </div>
+        );
+      } catch (storageError) {
+        console.error("Error saving video to storage:", storageError);
+        toast.error("Video generated but failed to save locally");
+        
+        // Still allow playback even if storage fails
+        const videoObjectUrl = URL.createObjectURL(videoBlob);
+        setVideoUrl(videoObjectUrl);
+        setIsVideoReady(true);
+      }
       
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -208,7 +230,7 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
     }
   };
 
-  const handleRemoveFile = () => {
+  const handleRemoveFile = async () => {
     // Abort any ongoing upload
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -220,11 +242,21 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
       URL.revokeObjectURL(videoUrl);
     }
     
-    // Remove from localStorage
-    localStorage.removeItem(STORAGE_KEY);
+    // Remove from IndexedDB storage
+    if (currentVideoId) {
+      try {
+        await videoStorageService.deleteVideo(currentVideoId);
+        // Update quota display
+        const updatedQuota = await videoStorageService.getStorageQuota();
+        setStorageQuota(updatedQuota);
+      } catch (error) {
+        console.error("Error removing video from storage:", error);
+      }
+    }
     
     setSelectedFile(null);
     setVideoUrl(null);
+    setCurrentVideoId(null);
     setUploadProgress(0);
     setIsUploading(false);
     setIsLoading(false);
@@ -238,8 +270,41 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
     toast.info("Video removed");
   };
 
+  // Storage quota display component
+  const StorageQuotaDisplay = ({ quota }: { quota: StorageQuota }) => {
+    const usagePercentage = quota.quota > 0 ? (quota.usage / quota.quota) * 100 : 0;
+    const isHighUsage = usagePercentage > 80;
+    
+    return (
+      <Card className="p-3 bg-gray-50">
+        <div className="flex items-center gap-2 mb-2">
+          <HardDrive size={16} className="text-gray-600" />
+          <span className="text-sm font-medium">Storage Usage</span>
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-gray-600">
+            <span>{formatFileSize(quota.usage)} used</span>
+            <span>{formatFileSize(quota.available)} available</span>
+          </div>
+          <Progress 
+            value={usagePercentage} 
+            className={cn("h-2", isHighUsage && "bg-red-100")}
+          />
+          {quota.quota > 0 && (
+            <div className="text-xs text-gray-500 text-center">
+              Total: {formatFileSize(quota.quota)}
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  };
+
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+      {/* Storage quota display */}
+      {storageQuota && <StorageQuotaDisplay quota={storageQuota} />}
+      
       {isVideoReady && videoUrl ? (
         <div className="space-y-4">
           <div className="flex justify-between">
@@ -298,7 +363,7 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
             <Progress value={uploadProgress} className="h-2" />
           </div>
           
-          {uploadProgress === 100 && (
+          {uploadProgress === 100 && !isVideoReady && !videoError && (
             <div className="flex items-center gap-2 text-green-600 mt-3 text-sm">
               <Check size={16} />
               <span>Upload complete</span>

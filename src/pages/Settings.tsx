@@ -16,6 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2 } from "lucide-react";
+import { StorageManager } from "@/components/storage/StorageManager";
 
 const Settings = () => {
   const { userProfile, updateUsername } = useAuth();
@@ -54,6 +55,9 @@ const Settings = () => {
   return (
     <AppLayout title="Settings" subtitle="Manage your account and preferences">
       <div className="space-y-6">
+        {/* Storage Management */}
+        <StorageManager />
+        
         {/* Profile Settings */}
         <Card>
           <CardHeader>
