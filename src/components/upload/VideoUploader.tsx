@@ -153,6 +153,8 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
       const response = await fetch(AI_SERVICE_URL, {
         method: 'POST',
         body: formData,
+        mode: 'cors',
+        credentials: "omit",
         signal: abortControllerRef.current.signal,
       });
 
