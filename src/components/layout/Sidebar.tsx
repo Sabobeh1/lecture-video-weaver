@@ -1,9 +1,9 @@
-
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,7 +22,7 @@ type SidebarProps = {
 type NavItemProps = {
   icon: React.ElementType;
   label: string;
-  href: string;
+  href?: string;
   active?: boolean;
   onClick?: () => void;
   collapsed?: boolean;
@@ -31,7 +31,21 @@ type NavItemProps = {
 const NavItem = ({ icon: Icon, label, href, active, onClick, collapsed }: NavItemProps) => (
   <Tooltip>
     <TooltipTrigger asChild>
-      <Link to={href} onClick={onClick}>
+      {href ? (
+        <Link to={href} onClick={onClick}>
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start gap-3 text-gray-500 hover:text-primary hover:bg-gray-100",
+              active && "text-primary bg-gray-100",
+              collapsed ? "px-3" : "px-4"
+            )}
+          >
+            <Icon size={20} />
+            {!collapsed && <span>{label}</span>}
+          </Button>
+        </Link>
+      ) : (
         <Button
           variant="ghost"
           className={cn(
@@ -39,11 +53,12 @@ const NavItem = ({ icon: Icon, label, href, active, onClick, collapsed }: NavIte
             active && "text-primary bg-gray-100",
             collapsed ? "px-3" : "px-4"
           )}
+          onClick={onClick}
         >
           <Icon size={20} />
           {!collapsed && <span>{label}</span>}
         </Button>
-      </Link>
+      )}
     </TooltipTrigger>
     {collapsed && <TooltipContent side="right">{label}</TooltipContent>}
   </Tooltip>
@@ -52,10 +67,21 @@ const NavItem = ({ icon: Icon, label, href, active, onClick, collapsed }: NavIte
 export function Sidebar({ className }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate("/auth");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   return (
@@ -121,8 +147,7 @@ export function Sidebar({ className }: SidebarProps) {
         <NavItem
           icon={LogOut}
           label="Log Out"
-          href="/auth"
-          onClick={() => console.log("Logout clicked")}
+          onClick={handleSignOut}
           collapsed={collapsed}
         />
       </div>
