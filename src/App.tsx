@@ -15,6 +15,7 @@ import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import NotFound from "./pages/NotFound";
+import LoadingSpinnerDemo from "./pages/LoadingSpinnerDemo";
 
 // Auth Provider
 import { AuthProvider } from "./contexts/AuthContext";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/player/:id" element={<VideoPlayerPage />} />
               <Route path="/videos" element={<MyVideos />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/loading-demo" element={<LoadingSpinnerDemo />} />
             </Route>
             
             {/* Root redirect */}

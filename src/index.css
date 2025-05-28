@@ -1,4 +1,3 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600&display=swap');
 
 @tailwind base;
@@ -92,6 +91,22 @@
   scrollbar-width: none;
 }
 
+/* Keyframes for spinner animations */
+@keyframes spinner-dash {
+  0% {
+    stroke-dasharray: 1, 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -35;
+  }
+  100% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -124;
+  }
+}
+
 /* Animation utilities */
 @layer utilities {
   .animate-spin-slow {
@@ -100,5 +115,9 @@
 
   .hover-scale {
     @apply transition-transform duration-200 hover:scale-105;
+  }
+
+  .spinner-dash {
+    animation: spinner-dash 1.5s ease-in-out infinite;
   }
 }

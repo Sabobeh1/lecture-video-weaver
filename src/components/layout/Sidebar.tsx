@@ -13,6 +13,7 @@ import {
   Play,
   Settings,
   LogOut,
+  Loader,
 } from "lucide-react";
 
 type SidebarProps = {
@@ -115,8 +116,8 @@ export function Sidebar({ className }: SidebarProps) {
         <NavItem
           icon={LayoutDashboard}
           label="Dashboard"
-          href="/"
-          active={isActive("/")}
+          href="/dashboard"
+          active={isActive("/dashboard")}
           collapsed={collapsed}
         />
         <NavItem
@@ -133,7 +134,13 @@ export function Sidebar({ className }: SidebarProps) {
           active={isActive("/videos")}
           collapsed={collapsed}
         />
-        
+        <NavItem
+          icon={Loader}
+          label="Loading Demo"
+          href="/loading-demo"
+          active={isActive("/loading-demo")}
+          collapsed={collapsed}
+        />
       </div>
       
       <div className="mt-auto border-t p-2">

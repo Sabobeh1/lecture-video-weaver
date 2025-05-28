@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useLoadingSpinner } from "@/hooks/useLoadingSpinner";
 import { toast } from "sonner";
-import { Upload, File as FileIcon, X, Check, Loader2, AlertTriangle, HardDrive } from "lucide-react";
+import { Upload, File as FileIcon, X, Check, AlertTriangle, HardDrive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { videoStorageService, VideoData, StorageQuota } from "@/services/videoStorageService";
@@ -21,14 +23,35 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(file || null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
-  const [videoError, setVideoError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [storageQuota, setStorageQuota] = useState<StorageQuota | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Enhanced loading spinner hook
+  const {
+    isLoading,
+    error: loadingError,
+    message: loadingMessage,
+    startLoading,
+    stopLoading,
+    setError: setLoadingError,
+    clearError: clearLoadingError,
+    cancel: cancelLoading,
+    updateMessage,
+    withLoading
+  } = useLoadingSpinner({
+    defaultMessage: "Generating your video via AI...",
+    onCancel: () => {
+      // Abort any ongoing upload
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      handleRemoveFile();
+    }
+  });
 
   useEffect(() => {
     if (file) {
@@ -140,88 +163,101 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
     setIsUploading(true);
     setUploadProgress(0);
     setIsVideoReady(false);
-    setVideoError(null);
-
-    // Create new AbortController for this upload
-    abortControllerRef.current = new AbortController();
+    clearLoadingError();
 
     try {
-      console.log("Uploading to AI service...");
-      const formData = new FormData();
-      formData.append('file', file);
+      await withLoading(async (signal) => {
+        // Create new AbortController for this upload
+        abortControllerRef.current = new AbortController();
+        
+        updateMessage("Preparing your PDF for processing...");
+        console.log("Uploading to AI service...");
+        
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const response = await fetch(AI_SERVICE_URL, {
-        method: 'POST',
-        body: formData,
-        signal: abortControllerRef.current.signal,
-      });
+        updateMessage("Uploading to AI service...");
+        
+        const response = await fetch(AI_SERVICE_URL, {
+          method: 'POST',
+          body: formData,
+          signal: abortControllerRef.current.signal,
+        });
 
-      console.log("AI Service Response:", response);
+        console.log("AI Service Response:", response);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
 
-      // Get the video blob from the response
-      const videoBlob = await response.blob();
-      
-      // Check storage space before saving
-      const { sufficient, quota } = await videoStorageService.checkStorageSpace(videoBlob.size);
-      setStorageQuota(quota);
-      
-      if (!sufficient) {
-        toast.error(
-          <div className="space-y-2">
-            <div className="font-semibold">Insufficient Storage Space</div>
-            <div className="text-sm">
-              Video size: {formatFileSize(videoBlob.size)}<br/>
-              Available: {formatFileSize(quota.available)}<br/>
-              Total quota: {formatFileSize(quota.quota)}
+        updateMessage("Processing AI response...");
+        
+        // Get the video blob from the response
+        const videoBlob = await response.blob();
+        
+        updateMessage("Checking storage space...");
+        
+        // Check storage space before saving
+        const { sufficient, quota } = await videoStorageService.checkStorageSpace(videoBlob.size);
+        setStorageQuota(quota);
+        
+        if (!sufficient) {
+          const errorMsg = `Insufficient storage space. Video size: ${formatFileSize(videoBlob.size)}, Available: ${formatFileSize(quota.available)}`;
+          toast.error(
+            <div className="space-y-2">
+              <div className="font-semibold">Insufficient Storage Space</div>
+              <div className="text-sm">
+                Video size: {formatFileSize(videoBlob.size)}<br/>
+                Available: {formatFileSize(quota.available)}<br/>
+                Total quota: {formatFileSize(quota.quota)}
+              </div>
+            </div>,
+            { duration: 10000 }
+          );
+          throw new Error(errorMsg);
+        }
+        
+        updateMessage("Saving video...");
+        
+        // Save video to IndexedDB
+        try {
+          const videoId = await videoStorageService.saveVideo(file.name, videoBlob);
+          setCurrentVideoId(videoId);
+          
+          // Create object URL for immediate playback
+          const videoObjectUrl = URL.createObjectURL(videoBlob);
+          setVideoUrl(videoObjectUrl);
+          setIsVideoReady(true);
+          
+          // Update quota display
+          const updatedQuota = await videoStorageService.getStorageQuota();
+          setStorageQuota(updatedQuota);
+          
+          toast.success(
+            <div className="space-y-1">
+              <div className="font-semibold">Video generated successfully!</div>
+              <div className="text-sm">Saved: {formatFileSize(videoBlob.size)}</div>
             </div>
-          </div>,
-          { duration: 10000 }
-        );
-        setVideoError("Insufficient storage space for video");
-        return;
-      }
-      
-      // Save video to IndexedDB
-      try {
-        const videoId = await videoStorageService.saveVideo(file.name, videoBlob);
-        setCurrentVideoId(videoId);
+          );
+        } catch (storageError) {
+          console.error("Error saving video to storage:", storageError);
+          toast.error("Video generated but failed to save locally");
+          
+          // Still allow playback even if storage fails
+          const videoObjectUrl = URL.createObjectURL(videoBlob);
+          setVideoUrl(videoObjectUrl);
+          setIsVideoReady(true);
+        }
         
-        // Create object URL for immediate playback
-        const videoObjectUrl = URL.createObjectURL(videoBlob);
-        setVideoUrl(videoObjectUrl);
-        setIsVideoReady(true);
-        
-        // Update quota display
-        const updatedQuota = await videoStorageService.getStorageQuota();
-        setStorageQuota(updatedQuota);
-        
-        toast.success(
-          <div className="space-y-1">
-            <div className="font-semibold">Video generated successfully!</div>
-            <div className="text-sm">Saved: {formatFileSize(videoBlob.size)}</div>
-          </div>
-        );
-      } catch (storageError) {
-        console.error("Error saving video to storage:", storageError);
-        toast.error("Video generated but failed to save locally");
-        
-        // Still allow playback even if storage fails
-        const videoObjectUrl = URL.createObjectURL(videoBlob);
-        setVideoUrl(videoObjectUrl);
-        setIsVideoReady(true);
-      }
+        return videoBlob;
+      }, "Starting video generation...");
       
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        toast.info("Upload cancelled");
+        toast.info("Video generation cancelled");
       } else {
         console.error("Error generating video:", error);
-        setVideoError(error.message || "Failed to generate video");
         toast.error("Error generating video");
       }
     } finally {
@@ -231,6 +267,9 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
   };
 
   const handleRemoveFile = async () => {
+    // Cancel any ongoing loading operation
+    cancelLoading();
+    
     // Abort any ongoing upload
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -259,15 +298,21 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
     setCurrentVideoId(null);
     setUploadProgress(0);
     setIsUploading(false);
-    setIsLoading(false);
     setIsVideoReady(false);
-    setVideoError(null);
+    clearLoadingError();
     
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
     
     toast.info("Video removed");
+  };
+
+  const handleRetryGeneration = () => {
+    if (selectedFile) {
+      clearLoadingError();
+      uploadToAIService(selectedFile);
+    }
   };
 
   // Storage quota display component
@@ -324,13 +369,6 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
             allowDownload={true}
           />
         </div>
-      ) : isLoading ? (
-        <Card className="p-8 flex flex-col items-center justify-center min-h-[300px]">
-          <Loader2 size={48} className="text-primary animate-spin mb-4" />
-          <p className="text-lg font-medium mb-2">Generating your video via AI...</p>
-          <p className="text-gray-500 mb-4">This may take a few moments</p>
-          <Button variant="outline" onClick={handleRemoveFile}>Cancel</Button>
-        </Card>
       ) : selectedFile ? (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
@@ -348,7 +386,7 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
             <Button
               variant="ghost"
               size="icon"
-              disabled={isUploading}
+              disabled={isUploading || isLoading}
               onClick={handleRemoveFile}
             >
               <X size={20} className="text-gray-500" />
@@ -357,16 +395,16 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
           
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm">
-              <span>{isUploading ? "Generating video..." : "Upload complete"}</span>
+              <span>{isUploading || isLoading ? "Generating video..." : "Ready to generate"}</span>
               <span>{uploadProgress}%</span>
             </div>
             <Progress value={uploadProgress} className="h-2" />
           </div>
           
-          {uploadProgress === 100 && !isVideoReady && !videoError && (
+          {uploadProgress === 100 && !isVideoReady && !loadingError && !isLoading && (
             <div className="flex items-center gap-2 text-green-600 mt-3 text-sm">
               <Check size={16} />
-              <span>Upload complete</span>
+              <span>Processing complete</span>
             </div>
           )}
         </Card>
@@ -401,24 +439,23 @@ export function VideoUploader({ loadingDelay = 10, file }: VideoUploaderProps) {
         </div>
       )}
 
-      {videoError && (
-        <Card className="p-4 mt-4 border-red-200 bg-red-50">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={20} className="text-red-500 mt-0.5" />
-            <div>
-              <p className="font-medium text-red-700">Error Generating Video</p>
-              <p className="text-sm text-red-600 mt-1">{videoError}</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="mt-3"
-                onClick={() => selectedFile && uploadToAIService(selectedFile)}
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </Card>
+      {/* Enhanced Loading Spinner */}
+      {isLoading && (
+        <LoadingSpinner 
+          message={loadingMessage}
+          showCancel={true}
+          onCancel={cancelLoading}
+        />
+      )}
+
+      {/* Enhanced Error Display */}
+      {loadingError && !isLoading && (
+        <LoadingSpinner 
+          isError={true}
+          error={loadingError}
+          showRetry={true}
+          onRetry={handleRetryGeneration}
+        />
       )}
     </div>
   );
