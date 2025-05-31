@@ -16,7 +16,7 @@ import {
   Database
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useVideoStorage } from '@/hooks/useVideoStorage';
+import { useFirebaseVideoStorage } from '@/hooks/useFirebaseVideoStorage';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -42,7 +42,7 @@ export function StorageManager() {
     formatFileSize,
     videoCount,
     totalStorageUsed,
-  } = useVideoStorage();
+  } = useFirebaseVideoStorage();
 
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
@@ -107,21 +107,19 @@ export function StorageManager() {
     }
   };
 
-  const handleDownloadVideo = (video: { videoBlob: Blob; fileName: string }) => {
-    const url = URL.createObjectURL(video.videoBlob);
+  const handleDownloadVideo = (video: { downloadUrl: string; fileName: string }) => {
     const link = document.createElement('a');
-    link.href = url;
+    link.href = video.downloadUrl;
     link.download = video.fileName;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
     toast.success('Video download started');
   };
 
-  const handlePlayVideo = (video: { videoBlob: Blob; fileName: string }) => {
-    const url = URL.createObjectURL(video.videoBlob);
-    window.open(url, '_blank');
+  const handlePlayVideo = (video: { downloadUrl: string; fileName: string }) => {
+    window.open(video.downloadUrl, '_blank');
   };
 
   return (

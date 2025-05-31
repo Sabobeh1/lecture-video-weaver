@@ -23,7 +23,7 @@ import {
   Eye
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useVideoStorage } from "@/hooks/useVideoStorage";
+import { useFirebaseVideoStorage } from "@/hooks/useFirebaseVideoStorage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
@@ -46,7 +46,7 @@ const MyVideos = () => {
     videoCount, 
     totalStorageUsed,
     deleteVideo 
-  } = useVideoStorage();
+  } = useFirebaseVideoStorage();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<string>("newest");
@@ -230,47 +230,32 @@ function VideoGridCard({
   isDeleting: boolean;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const handlePlay = () => {
-    if (!videoUrl) {
-      const url = URL.createObjectURL(video.videoBlob);
-      setVideoUrl(url);
-    }
     setIsPlaying(true);
   };
 
   const handleDownload = () => {
-    const url = URL.createObjectURL(video.videoBlob);
     const link = document.createElement('a');
-    link.href = url;
+    link.href = video.downloadUrl;
     link.download = video.fileName;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
     toast.success('Download started');
   };
 
   const handleViewInNewTab = () => {
-    const url = URL.createObjectURL(video.videoBlob);
-    window.open(url, '_blank');
+    window.open(video.downloadUrl, '_blank');
   };
-
-  React.useEffect(() => {
-    return () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
-    };
-  }, [videoUrl]);
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
       <div className="relative aspect-video bg-gray-200">
-        {isPlaying && videoUrl ? (
+        {isPlaying ? (
           <video 
-            src={videoUrl} 
+            src={video.downloadUrl} 
             controls 
             className="w-full h-full object-cover"
             onError={() => setIsPlaying(false)}
@@ -328,17 +313,17 @@ function VideoGridCard({
             <Button 
               variant="outline" 
               size="sm"
-              onClick={handleViewInNewTab}
-            >
-              <Eye size={16} />
-            </Button>
-
-            <Button 
-              variant="outline" 
-              size="sm"
               onClick={handleDownload}
             >
               <Download size={16} />
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleViewInNewTab}
+            >
+              <Eye size={16} />
             </Button>
 
             <AlertDialog>
@@ -355,7 +340,7 @@ function VideoGridCard({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Video?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete "{video.fileName}". This action cannot be undone.
+                    This will permanently delete "{video.fileName}" from Firebase Storage. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -389,56 +374,57 @@ function VideoListCard({
   isDeleting: boolean;
 }) {
   const handleDownload = () => {
-    const url = URL.createObjectURL(video.videoBlob);
     const link = document.createElement('a');
-    link.href = url;
+    link.href = video.downloadUrl;
     link.download = video.fileName;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
     toast.success('Download started');
   };
 
-  const handlePlay = () => {
-    const url = URL.createObjectURL(video.videoBlob);
-    window.open(url, '_blank');
+  const handleViewInNewTab = () => {
+    window.open(video.downloadUrl, '_blank');
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card>
       <CardContent className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center">
-            <FileIcon size={24} className="text-blue-600" />
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 truncate mb-1" title={video.fileName}>
-              {video.fileName}
-            </h3>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <div className="flex items-center gap-1">
-                <Calendar size={14} />
-                <span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-3 rounded-lg">
+              <Video size={24} className="text-blue-600" />
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 truncate mb-1" title={video.fileName}>
+                {video.fileName}
+              </h3>
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span className="flex items-center gap-1">
+                  <FileIcon size={14} />
+                  {formatFileSize(video.fileSize)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar size={14} />
                   {new Date(video.timestamp).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
-                    day: 'numeric'
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
                   })}
                 </span>
               </div>
-              <Badge variant="secondary" className="text-xs">
-                {formatFileSize(video.fileSize)}
-              </Badge>
             </div>
           </div>
-
+          
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
               size="sm"
-              onClick={handlePlay}
+              onClick={handleViewInNewTab}
             >
               <Play size={16} className="mr-1" />
               Play
@@ -450,6 +436,14 @@ function VideoListCard({
               onClick={handleDownload}
             >
               <Download size={16} />
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleViewInNewTab}
+            >
+              <Eye size={16} />
             </Button>
 
             <AlertDialog>
@@ -466,7 +460,7 @@ function VideoListCard({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Video?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete "{video.fileName}". This action cannot be undone.
+                    This will permanently delete "{video.fileName}" from Firebase Storage. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

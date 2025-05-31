@@ -12,12 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Video, HardDrive } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useVideoStorage } from "@/hooks/useVideoStorage";
+import { useFirebaseVideoStorage } from "@/hooks/useFirebaseVideoStorage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 
 const Dashboard = () => {
-  const { videos, loading, formatFileSize, videoCount, totalStorageUsed } = useVideoStorage();
+  const { videos, loading, formatFileSize, videoCount, totalStorageUsed } = useFirebaseVideoStorage();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<string>("newest");
 

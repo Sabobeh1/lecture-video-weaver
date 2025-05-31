@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { FileUploader } from "@/components/upload/FileUploader";
 import { VideoUploader } from "@/components/upload/VideoUploader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useVideoStorage } from "@/hooks/useVideoStorage";
+import { useFirebaseVideoStorage } from "@/hooks/useFirebaseVideoStorage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ const Upload = () => {
     formatFileSize, 
     videoCount, 
     deleteVideo 
-  } = useVideoStorage();
+  } = useFirebaseVideoStorage();
   
   const [showAllVideos, setShowAllVideos] = useState(false);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
@@ -54,19 +54,19 @@ const Upload = () => {
   };
 
   const handlePlayVideo = (video: any) => {
-    const url = URL.createObjectURL(video.videoBlob);
-    window.open(url, '_blank');
+    // Open Firebase Storage URL directly
+    window.open(video.downloadUrl, '_blank');
   };
 
   const handleDownloadVideo = (video: any) => {
-    const url = URL.createObjectURL(video.videoBlob);
+    // Create download link for Firebase Storage URL
     const link = document.createElement('a');
-    link.href = url;
+    link.href = video.downloadUrl;
     link.download = video.fileName;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
     toast.success('Download started');
   };
 
